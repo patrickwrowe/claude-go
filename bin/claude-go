@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# claude-go: Claude Code, running on OpenCode Go models via a local LiteLLM proxy.
+#
+# Every argument is passed straight to `claude`, so anything that works there
+# works here:
+#   claude-go                          # interactive, default model
+#   claude-go --model kimi-k2.7-code   # pick any model from `claude-go-ctl models`
+#   claude-go -p "explain this repo"   # headless
+#   claude-go --resume
+#
+# Plain `claude` is untouched and keeps using your Anthropic subscription.
+set -euo pipefail
+
+# Locate the repo (this file may be a symlink in ~/.local/bin).
+cg_self="${BASH_SOURCE[0]}"
+while [ -L "$cg_self" ]; do
+  cg_d="$(cd -P "$(dirname "$cg_self")" && pwd)"; cg_self="$(readlink "$cg_self")"
+  [[ $cg_self != /* ]] && cg_self="$cg_d/$cg_self"
+done
+CG_REPO="$(cd -P "$(dirname "$cg_self")/.." && pwd)"
+# shellcheck source=../lib/common.sh
+. "$CG_REPO/lib/common.sh"
+
+cg_load_env
+cg_proxy_start "$CG_REPO"
+
+claude_bin="${CLAUDE_GO_CLAUDE_BIN:-$(command -v claude || true)}"
+[[ -n $claude_bin ]] || { cg_err "claude (Claude Code) not found on PATH"; exit 1; }
+
+# --- route Claude Code to the proxy ---
+export ANTHROPIC_BASE_URL="$CG_URL"
+export ANTHROPIC_AUTH_TOKEN="$LITELLM_MASTER_KEY"   # Bearer auth: no login prompt, subscription login stays inactive
+unset ANTHROPIC_API_KEY CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
+
+# --- model tiers (Claude Code's opus/sonnet/haiku aliases map onto Go models) ---
+export ANTHROPIC_MODEL="${CLAUDE_GO_MODEL:-minimax-m3}"                 # --model overrides this
+export ANTHROPIC_DEFAULT_OPUS_MODEL="${CLAUDE_GO_OPUS_MODEL:-kimi-k2.7-code}"
+export ANTHROPIC_DEFAULT_SONNET_MODEL="${CLAUDE_GO_SONNET_MODEL:-minimax-m3}"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="${CLAUDE_GO_HAIKU_MODEL:-qwen3.8-flash}"  # background tasks, titles, Explore
+if [[ -n ${CLAUDE_GO_SUBAGENT_MODEL:-} ]]; then export CLAUDE_CODE_SUBAGENT_MODEL="$CLAUDE_GO_SUBAGENT_MODEL"; fi
+if [[ -n ${CLAUDE_GO_COMPACT_WINDOW:-} ]]; then export CLAUDE_CODE_AUTO_COMPACT_WINDOW="$CLAUDE_GO_COMPACT_WINDOW"; fi
+
+# --- Go client etiquette ---
+# Go asks for a stable per-conversation session ID in x-opencode-session (routing +
+# prompt caching). One per claude-go process; the proxy forwards x-* headers upstream.
+sid="$(cg_uuid)"
+export ANTHROPIC_CUSTOM_HEADERS="x-opencode-session: $sid${ANTHROPIC_CUSTOM_HEADERS:+$'\n'$ANTHROPIC_CUSTOM_HEADERS}"
+
+# --- compatibility with non-Anthropic backends ---
+export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1   # unknown anthropic-beta values make some backends 400
+export CLAUDE_CODE_ATTRIBUTION_HEADER=0           # per-request fingerprint in the system prompt defeats prefix caching
+
+# --- keep Claude Code state separate from your subscription setup ---
+# (model choices made with /model here would otherwise leak into plain `claude`)
+export CLAUDE_CONFIG_DIR="${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}"
+
+export CLAUDE_GO=1 CLAUDE_GO_SESSION="$sid"   # handy for statuslines and hooks
+exec "$claude_bin" "$@"

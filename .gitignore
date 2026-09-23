@@ -1,0 +1,6 @@
+# secrets never live in the repo (they are in ~/.config/claude-go/env)
+env
+*.env
+.env*
+!config/env.example
+__pycache__/

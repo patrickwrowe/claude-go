@@ -1,0 +1,44 @@
+# OpenCode Go model catalog -> config/litellm.yaml (regenerate with scripts/gen-config.sh)
+# Source of truth: https://opencode.ai/docs/go/  (Endpoints and Privacy tables)
+# Check for drift against the live API with:  claude-go-ctl sync-models
+#
+# Columns are TAB separated:
+#   id        Go model ID, also the name you pass to `claude-go --model`
+#   protocol  messages  = Anthropic Messages (/v1/messages): forwarded natively
+#             chat      = OpenAI Chat Completions: translated by LiteLLM
+#             responses = OpenAI Responses API: translated by LiteLLM
+#   enabled   yes | no  (no = kept for reference but not exposed by the proxy)
+#   note      free text shown by `claude-go-ctl models`
+#
+# id	protocol	enabled	note
+minimax-m3	messages	yes	native Anthropic; ~3,200 req/5h
+minimax-m2.7	messages	yes	native Anthropic; ~3,400 req/5h
+minimax-m2.5	messages	yes	native Anthropic
+qwen3.8-max	messages	yes	native Anthropic; small quota (~160 req/5h)
+qwen3.8-flash	messages	yes	native Anthropic; ~5,400 req/5h
+qwen3.7-max	messages	yes	native Anthropic; small quota (~170 req/5h)
+qwen3.7-plus	messages	yes	native Anthropic; ~4,300 req/5h
+qwen3.6-plus	messages	yes	native Anthropic; ~3,300 req/5h
+kimi-k3	chat	yes	small quota (~110 req/5h)
+kimi-k2.7-code	chat	yes	~1,350 req/5h
+kimi-k2.6	chat	yes	~1,150 req/5h
+glm-5.3	chat	yes	small quota (~220 req/5h)
+glm-5.3-flash	chat	yes	~6,300 req/5h
+glm-5.2	chat	yes	~880 req/5h
+glm-5.1	chat	yes	~880 req/5h
+deepseek-v4-pro	chat	yes	~1,050 req/5h; peak pricing weekday UTC mornings
+deepseek-v4-flash	chat	yes	~13,000 req/5h
+deepseek-v4.1-flash	chat	yes	large quota
+deepseek-v4-flash-vision-exp	chat	yes	experimental vision model
+mimo-v2.6-pro	chat	yes	~3,250 req/5h
+mimo-v2.6-flash	chat	yes	very large quota
+mimo-v2.5-pro	chat	yes	~3,250 req/5h
+mimo-v2.5	chat	yes	very large quota
+longcat-2.0	chat	yes	~11,400 req/5h
+hy4-preview	chat	yes	~1,350 req/5h
+hy3	chat	yes	~4,300 req/5h
+grok-4.7	responses	yes	30-day retention; small quota
+grok-4.6	responses	yes	30-day retention; small quota
+gpt-5.6-luna	responses	yes	30-day retention (abuse monitoring)
+muse-spark-1.3-contributor	responses	no	TRAINS ON YOUR DATA; disabled by default
+muse-spark-1.2-contributor	responses	no	TRAINS ON YOUR DATA; disabled by default

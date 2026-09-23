@@ -1,0 +1,240 @@
+#!/usr/bin/env bash
+# claude-go-ctl: manage the claude-go proxy and model catalog.
+set -euo pipefail
+
+cg_self="${BASH_SOURCE[0]}"
+while [ -L "$cg_self" ]; do
+  cg_d="$(cd -P "$(dirname "$cg_self")" && pwd)"; cg_self="$(readlink "$cg_self")"
+  [[ $cg_self != /* ]] && cg_self="$cg_d/$cg_self"
+done
+CG_REPO="$(cd -P "$(dirname "$cg_self")/.." && pwd)"
+# shellcheck source=../lib/common.sh
+. "$CG_REPO/lib/common.sh"
+
+usage() {
+  cat <<EOF
+claude-go-ctl $(cat "$CG_REPO/VERSION")  (repo: $CG_REPO)
+
+Proxy
+  start | stop | restart     manage the local LiteLLM proxy (claude-go starts it on demand)
+  status                     proxy health, pid, port, model count
+  logs [-f]                  show (or follow) the proxy log
+
+Models
+  models                     list catalog models, protocols and current tier mapping
+  test [MODEL...]            live round-trip through proxy -> Go (defaults: one per protocol; uses a few tokens)
+  sync-models                diff config/models.tsv against Go's live /v1/models
+  regen                      regenerate config/litellm.yaml from config/models.tsv (restarts a running proxy)
+
+Maintenance
+  doctor                     check dependencies, config, proxy and upstream reachability
+  update                     git pull --ff-only, reinstall pinned LiteLLM if changed, regen, restart
+  env                        print the config file path and its non-secret settings
+  gastown                    print a Gas Town agent preset that runs claude-go
+EOF
+}
+
+tiers() {
+  printf '  default  %s\n  opus     %s\n  sonnet   %s\n  haiku    %s\n' \
+    "${CLAUDE_GO_MODEL:-minimax-m3}" "${CLAUDE_GO_OPUS_MODEL:-kimi-k2.7-code}" \
+    "${CLAUDE_GO_SONNET_MODEL:-minimax-m3}" "${CLAUDE_GO_HAIKU_MODEL:-qwen3.8-flash}"
+  [[ -n ${CLAUDE_GO_SUBAGENT_MODEL:-} ]] && printf '  subagent %s\n' "$CLAUDE_GO_SUBAGENT_MODEL"
+  return 0
+}
+
+catalog_ids() { awk -F'\t' '!/^[[:space:]]*#/ && NF>=3 && $3=="yes" {print $1}' "$CG_REPO/config/models.tsv"; }
+
+cmd_status() {
+  cg_load_env
+  local pid; pid="$(cg_proxy_pid || true)"
+  if cg_proxy_healthy; then
+    local n
+    n="$(curl -s -m 5 -H "Authorization: Bearer $LITELLM_MASTER_KEY" "$CG_URL/v1/models" | grep -o '"id"' | wc -l | tr -d ' ')"
+    echo "proxy: healthy on $CG_URL (pid ${pid:-unknown}), $n models"
+  else
+    echo "proxy: not running (${pid:+stale pid $pid, }port $CLAUDE_GO_PORT)"
+  fi
+  echo "upstream: $OPENCODE_GO_BASE"
+  echo "tiers:"; tiers
+}
+
+cmd_models() {
+  cg_load_env
+  printf '%-30s %-10s %s\n' MODEL PROTOCOL NOTE
+  awk -F'\t' '!/^[[:space:]]*#/ && NF>=3 {
+      tag = ($3 == "yes") ? "" : "  [disabled]"
+      printf "%-30s %-10s %s%s\n", $1, $2, $4, tag }' "$CG_REPO/config/models.tsv"
+  echo; echo "tier mapping (edit in $CG_ENV_FILE):"; tiers
+}
+
+# One tiny /v1/messages call per model through the proxy.
+cmd_test() {
+  cg_load_env
+  cg_proxy_start "$CG_REPO"
+  local models=("$@")
+  [[ ${#models[@]} -gt 0 ]] || models=(minimax-m3 kimi-k2.7-code gpt-5.6-luna)
+  local sid; sid="$(cg_uuid)"; local rc=0 m out t0 t1
+  for m in "${models[@]}"; do
+    t0=$(date +%s)
+    out="$(curl -s -m 120 "$CG_URL/v1/messages" \
+      -H "Authorization: Bearer $LITELLM_MASTER_KEY" -H "content-type: application/json" \
+      -H "anthropic-version: 2023-06-01" -H "x-opencode-session: $sid" \
+      -d "{\"model\":\"$m\",\"max_tokens\":64,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: ok\"}]}")" || true
+    t1=$(date +%s)
+    if grep -q '"type":"message"\|"type": "message"' <<<"$out" && ! grep -q '"type":"error"' <<<"$out"; then
+      printf '  OK    %-28s %2ss\n' "$m" "$((t1 - t0))"
+    else
+      printf '  FAIL  %-28s %s\n' "$m" "$(tr -d '\n' <<<"$out" | cut -c1-240)"; rc=1
+    fi
+  done
+  return $rc
+}
+
+cmd_sync_models() {
+  cg_load_env
+  local live
+  live="$(curl -sf -m 20 -H "Authorization: Bearer $OPENCODE_GO_API_KEY" "$OPENCODE_GO_BASE/v1/models")" \
+    || { cg_err "could not fetch $OPENCODE_GO_BASE/v1/models"; return 1; }
+  local live_ids all_ids
+  live_ids="$(grep -o '"id" *: *"[^"]*"' <<<"$live" | sed 's/.*"\([^"]*\)"$/\1/' | sort -u)"
+  all_ids="$(awk -F'\t' '!/^[[:space:]]*#/ && NF>=3 {print $1}' "$CG_REPO/config/models.tsv" | sort -u)"
+  local new gone
+  new="$(comm -23 <(echo "$live_ids") <(echo "$all_ids"))"
+  gone="$(comm -13 <(echo "$live_ids") <(echo "$all_ids"))"
+  echo "live Go models: $(grep -c . <<<"$live_ids")   catalog entries: $(grep -c . <<<"$all_ids")"
+  if [[ -n $new ]]; then
+    echo; echo "New on Go, not in config/models.tsv (check the protocol in the Endpoints table at https://opencode.ai/docs/go/):"
+    sed 's/^/  + /' <<<"$new"
+  fi
+  if [[ -n $gone ]]; then
+    echo; echo "In the catalog but not offered by Go any more (set enabled=no or delete):"
+    sed 's/^/  - /' <<<"$gone"
+  fi
+  [[ -z $new && -z $gone ]] && echo "catalog is in sync."
+  return 0
+}
+
+cmd_regen() {
+  bash "$CG_REPO/scripts/gen-config.sh"
+  cg_load_env
+  if cg_proxy_pid >/dev/null; then cg_proxy_stop; cg_proxy_start "$CG_REPO"; fi
+}
+
+cmd_doctor() {
+  local bad=0
+  ok()   { printf '  \033[32mok\033[0m    %s\n' "$*"; }
+  warn() { printf '  \033[33mwarn\033[0m  %s\n' "$*"; }
+  no()   { printf '  \033[31mFAIL\033[0m  %s\n' "$*"; bad=1; }
+
+  echo "dependencies"
+  if command -v claude >/dev/null; then ok "claude $(claude --version 2>/dev/null | head -1)"; else no "claude not on PATH"; fi
+  for b in curl git uv; do command -v $b >/dev/null && ok "$b" || no "$b not on PATH"; done
+  local lb lv pinned; pinned="$(cat "$CG_REPO/config/LITELLM_VERSION")"
+  if lb="$(cg_litellm_bin 2>/dev/null)"; then
+    lv="$(uv tool list 2>/dev/null | awk '/^litellm /{print $2}' | tr -d v)"
+    case "$lv" in
+      1.82.7|1.82.8) no "litellm $lv is a COMPROMISED release (March 2026). Uninstall now and rotate credentials." ;;
+      "$pinned") ok "litellm $lv (pinned) at $lb" ;;
+      "") warn "litellm at $lb (version unknown; pinned is $pinned)" ;;
+      *) warn "litellm $lv installed, repo pins $pinned (run: claude-go-ctl update)" ;;
+    esac
+  else no "litellm not installed (run install.sh)"; fi
+
+  echo "config"
+  if [[ -f $CG_ENV_FILE ]]; then
+    ok "$CG_ENV_FILE"
+    [[ "$(ls -l "$CG_ENV_FILE" | cut -c5-10)" == "------" ]] && ok "permissions 600" || no "env file readable by others (chmod 600)"
+  else no "$CG_ENV_FILE missing (run install.sh)"; echo; return 1; fi
+  cg_load_env
+  [[ ${#OPENCODE_GO_API_KEY} -gt 10 ]] && ok "OPENCODE_GO_API_KEY set" || no "OPENCODE_GO_API_KEY looks empty"
+  [[ -f $CG_REPO/config/litellm.yaml ]] && ok "config/litellm.yaml ($(grep -c '^  - model_name:' "$CG_REPO/config/litellm.yaml") models)" || no "config/litellm.yaml missing (claude-go-ctl regen)"
+  if [[ $CG_REPO/config/models.tsv -nt $CG_REPO/config/litellm.yaml ]]; then warn "models.tsv is newer than litellm.yaml (claude-go-ctl regen)"; fi
+  local cfg="${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}"
+  [[ -d $cfg ]] && ok "Claude Code config dir $cfg" || warn "$cfg does not exist yet (created on first run)"
+
+  echo "upstream"
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' -m 15 -H "Authorization: Bearer $OPENCODE_GO_API_KEY" "$OPENCODE_GO_BASE/v1/models" || true)"
+  case "$code" in
+    200) ok "$OPENCODE_GO_BASE/v1/models reachable, key accepted" ;;
+    401|403) no "$OPENCODE_GO_BASE rejected the key (HTTP $code)" ;;
+    000) no "cannot reach $OPENCODE_GO_BASE (network/proxy?)" ;;
+    *) warn "$OPENCODE_GO_BASE/v1/models returned HTTP $code" ;;
+  esac
+
+  echo "proxy"
+  if cg_proxy_healthy; then ok "healthy on $CG_URL"
+  elif cg_proxy_start "$CG_REPO"; then ok "started and healthy on $CG_URL"
+  else no "proxy failed to start (see $CG_LOG_FILE)"; fi
+
+  echo
+  if [[ $bad -eq 0 ]]; then echo "doctor: all good. Try: claude-go-ctl test"; else echo "doctor: problems found (see above)"; fi
+  return $bad
+}
+
+cmd_update() {
+  local before after
+  before="$(cat "$CG_REPO/config/LITELLM_VERSION")"
+  git -C "$CG_REPO" pull --ff-only
+  after="$(cat "$CG_REPO/config/LITELLM_VERSION")"
+  if [[ $before != "$after" ]]; then
+    echo "LiteLLM pin changed $before -> $after; reinstalling"
+    bash "$CG_REPO/install.sh" --litellm-only
+  fi
+  cmd_regen
+}
+
+cmd_env() {
+  echo "config file: $CG_ENV_FILE"
+  [[ -f $CG_ENV_FILE ]] && grep -v -E '^(OPENCODE_GO_API_KEY|LITELLM_MASTER_KEY)=' "$CG_ENV_FILE" | grep -v '^[[:space:]]*$' || true
+}
+
+cmd_gastown() {
+  local bin; bin="$(command -v claude-go || echo "$CG_REPO/bin/claude-go")"
+  cat <<EOF
+# 1) Register claude-go as a Gas Town agent preset (~/gt/settings/agents.json).
+#    It is Claude Code underneath, so it reuses Claude's hook integration.
+#    Compare these fields with the built-in "claude" preset in your Gas Town
+#    version (gt config agent list / internal/config/agents.go) and copy any
+#    that differ; only "name" and "command" should need to change.
+{
+  "version": 1,
+  "agents": {
+    "claude-go": {
+      "name": "claude-go",
+      "command": "$bin",
+      "args": ["--dangerously-skip-permissions"],
+      "process_names": ["claude", "node"],
+      "resume_flag": "--resume",
+      "resume_style": "flag",
+      "supports_hooks": true,
+      "supports_fork_session": true,
+      "hooks_provider": "claude",
+      "prompt_mode": "arg"
+    }
+  }
+}
+
+# 2) Route roles in ~/gt/settings/config.json (Mayor/Refinery stay on your subscription):
+#    "role_agents": { "polecat": "claude-go", "witness": "claude-go" }
+# 3) Or per task:  gt sling <bead> <rig> --agent claude-go
+EOF
+}
+
+case "${1:-help}" in
+  start)    cg_load_env; cg_proxy_start "$CG_REPO" && cmd_status ;;
+  stop)     cg_load_env; cg_proxy_stop ;;
+  restart)  cg_load_env; cg_proxy_stop; cg_proxy_start "$CG_REPO" && cmd_status ;;
+  status)   cmd_status ;;
+  logs)     shift; if [[ ${1:-} == -f ]]; then tail -f "$CG_LOG_FILE"; else tail -50 "$CG_LOG_FILE"; fi ;;
+  models)   cmd_models ;;
+  test)     shift; cmd_test "$@" ;;
+  sync-models) cmd_sync_models ;;
+  regen)    cmd_regen ;;
+  doctor)   cmd_doctor ;;
+  update)   cmd_update ;;
+  env)      cmd_env ;;
+  gastown)  cmd_gastown ;;
+  help|-h|--help) usage ;;
+  *) cg_err "unknown command: $1"; usage; exit 2 ;;
+esac

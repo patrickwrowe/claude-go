@@ -1,0 +1,201 @@
+# claude-go
+
+Run **Claude Code on every OpenCode Go model**: MiniMax, Qwen, Kimi, GLM, DeepSeek,
+MiMo, Grok and more, while plain `claude` keeps using your Anthropic subscription.
+
+```
+claude           ->  api.anthropic.com                          (your subscription, unchanged)
+claude-go        ->  LiteLLM on 127.0.0.1:4141  ->  opencode.ai/zen/go
+                        |- qwen*, minimax-*   : Anthropic Messages, forwarded as-is
+                        |- glm, kimi, deepseek, mimo, longcat, hy : translated to Chat Completions
+                        '- grok, gpt-5.6-luna : translated to the Responses API
+```
+
+Claude Code only speaks the Anthropic Messages API, and only the Qwen and MiniMax
+models on Go do too. A local [LiteLLM](https://docs.litellm.ai/) proxy translates
+for the rest, so one `claude-go` command reaches the whole catalog, including tool
+calls. Everything is plain bash plus a pinned LiteLLM, installed per machine from this repo.
+
+## Quick start
+
+```bash
+git clone <your-remote>/claude-go.git ~/src/claude-go
+cd ~/src/claude-go
+./install.sh                  # prompts for your OpenCode Go key (https://opencode.ai/auth)
+claude-go-ctl test            # live check: one model per protocol, a few tokens
+claude-go                     # Claude Code on Go (default model: minimax-m3)
+```
+
+Requirements: Linux or macOS (WSL on Windows), `bash`, `curl`, `git`, and Claude Code.
+The installer offers to install [uv](https://docs.astral.sh/uv/) if missing, then uses
+it to install the pinned LiteLLM into an isolated tool environment.
+
+## Daily use
+
+```bash
+claude-go                               # interactive, default model
+claude-go --model kimi-k2.7-code        # any id from `claude-go-ctl models`
+claude-go -p "summarize this repo"      # headless
+claude-go --resume                      # resume an earlier claude-go session
+```
+
+Inside a session, `/model opus`, `/model sonnet` and `/model haiku` switch between the
+three tier models, and `/model <id>` switches to any other catalog model.
+
+| command | what it does |
+|---|---|
+| `claude-go-ctl models` | catalog, protocol per model, current tier mapping |
+| `claude-go-ctl test [MODEL...]` | live round-trip through proxy to Go |
+| `claude-go-ctl status` / `start` / `stop` / `restart` | proxy lifecycle (`claude-go` starts it on demand) |
+| `claude-go-ctl logs [-f]` | proxy log (`~/.local/state/claude-go/proxy.log`) |
+| `claude-go-ctl doctor` | dependencies, config, key, upstream, proxy |
+| `claude-go-ctl sync-models` | diff the catalog against Go's live `/v1/models` |
+| `claude-go-ctl regen` | rebuild `config/litellm.yaml` after editing the catalog |
+| `claude-go-ctl update` | `git pull`, reinstall LiteLLM if the pin changed, regen, restart |
+| `claude-go-ctl gastown` | print a Gas Town agent preset for claude-go |
+
+## Configuration
+
+Secrets and personal settings live **outside the repo** in `~/.config/claude-go/env`
+(mode 600, created by `install.sh` from `config/env.example`):
+
+| variable | default | meaning |
+|---|---|---|
+| `OPENCODE_GO_API_KEY` | (required) | your Go key |
+| `LITELLM_MASTER_KEY` | generated | local key Claude Code uses to reach the proxy |
+| `CLAUDE_GO_MODEL` | `minimax-m3` | model at startup |
+| `CLAUDE_GO_OPUS_MODEL` | `kimi-k2.7-code` | `opus` alias, opus-tier subagents |
+| `CLAUDE_GO_SONNET_MODEL` | `minimax-m3` | `sonnet` alias, sonnet-tier subagents |
+| `CLAUDE_GO_HAIKU_MODEL` | `qwen3.8-flash` | background work (titles, summaries), Explore agent |
+| `CLAUDE_GO_SUBAGENT_MODEL` | unset | force every subagent onto one model |
+| `CLAUDE_GO_COMPACT_WINDOW` | unset | compact earlier for smaller-context models |
+| `CLAUDE_GO_PORT` | `4141` | proxy port (127.0.0.1 only) |
+| `OPENCODE_GO_BASE` | `https://opencode.ai/zen/go` | upstream |
+| `CLAUDE_GO_CONFIG_DIR` | `~/.claude-go` | Claude Code state for claude-go sessions |
+
+Tier defaults favour models that are both capable and generous under Go's quotas.
+Qwen3.8 Max, Qwen3.7 Max, Kimi K3, GLM-5.3 and Grok have small quotas (a few hundred
+requests per 5 hours), so avoid them as the default or haiku tier.
+
+**Why a separate Claude Code config dir?** Settings, session history and `/model`
+choices live in Claude Code's config dir. Sharing `~/.claude` risks a Go model ID like
+`kimi-k2.7-code` ending up in plain `claude` sessions, where it fails, and mixes the
+two setups' session histories. The installer offers to symlink `CLAUDE.md`, `skills/`,
+`agents/` and `commands/` from `~/.claude`, so your instructions and tooling carry over.
+
+## How it works
+
+`bin/claude-go` loads your config, starts the proxy if needed, and `exec`s Claude Code with:
+
+- `ANTHROPIC_BASE_URL` pointing at the proxy and `ANTHROPIC_AUTH_TOKEN` set to the local
+  master key (Bearer auth, so there's no login prompt and your subscription login stays out of it);
+- `ANTHROPIC_MODEL` and `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL` mapped to Go models;
+- `x-opencode-session: <uuid>` added via `ANTHROPIC_CUSTOM_HEADERS`. Go asks clients for a
+  stable per-conversation session ID for routing and prompt caching;
+- `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` and `CLAUDE_CODE_ATTRIBUTION_HEADER=0`, so
+  unknown betas don't cause errors and a per-request fingerprint doesn't defeat prefix caching.
+
+`config/litellm.yaml` is **generated** from `config/models.tsv` by `scripts/gen-config.sh`:
+
+| protocol in catalog | LiteLLM model | upstream endpoint |
+|---|---|---|
+| `messages` | `anthropic/<id>` | `/v1/messages` (native) |
+| `chat` | `openai/<id>` | `/v1/chat/completions` |
+| `responses` | `openai/responses/<id>` | `/v1/responses` |
+
+Every deployment sends `User-Agent: claude-go/<version>`, because Go asks clients to
+identify themselves rather than use a generic SDK name. The proxy forwards client `x-*`
+headers upstream, which carries the session headers. Two proxy settings matter:
+`drop_params: true` discards Anthropic-only parameters that translated backends
+reject, and `use_chat_completions_url_for_anthropic_messages: true` stops LiteLLM
+1.10x from sending Chat Completions models to the Responses API.
+
+## Maintenance
+
+**New or retired Go models.** Run `claude-go-ctl sync-models`. For each new ID, look up
+its endpoint in the Endpoints table at https://opencode.ai/docs/go/, add a line to
+`config/models.tsv`, run `claude-go-ctl regen`, and commit.
+
+**LiteLLM upgrades.** The version is pinned in `config/LITELLM_VERSION`. LiteLLM
+1.82.7 and 1.82.8 on PyPI were compromised with a credential stealer in March 2026;
+the installer and doctor refuse them. To upgrade, bump the pin, run
+`test/offline.sh`, then commit. Other machines pick it up with `claude-go-ctl update`.
+
+**New machine.** Clone, `./install.sh`, done. Only the key needs to be entered per machine.
+
+## Testing
+
+`test/offline.sh` needs no key and no network access to Go. It starts `test/mock_go.py`
+(a fake Go API speaking all three protocols) and a real LiteLLM proxy with the generated
+config, then asserts, per protocol and for streaming and non-streaming requests:
+
+- the upstream path;
+- the auth header;
+- the `claude-go/*` User-Agent;
+- the session headers;
+- that the proxy key never leaks upstream.
+
+If `claude` is installed, it also runs real headless Claude Code turns, including a
+**tool call round-trip**. The mock requests `Bash`, Claude Code runs it, and the
+result must make it back through the translation.
+
+Run it after any change to the catalog, generator, or LiteLLM pin.
+
+## Rollout plan
+
+1. **One machine, offline.** Clone, `./install.sh`, then `test/offline.sh` (confirms LiteLLM
+   and Claude Code versions translate correctly on this machine).
+2. **Live.** `claude-go-ctl doctor`, then `claude-go-ctl test` and
+   `claude-go-ctl test qwen3.8-flash glm-5.2 deepseek-v4-flash` to sample each model family.
+3. **Shadow use for a week.** Use `claude-go` for low-stakes work (docstrings, test
+   scaffolding, log triage). Note which models handle Claude Code's tool use well, and
+   adjust tiers in `~/.config/claude-go/env`. Watch usage at https://opencode.ai/auth.
+4. **Commit the tuning.** Put good defaults in `config/env.example` or the catalog notes,
+   push, and install on your other machines.
+5. **Orchestration (optional).** `claude-go-ctl gastown` prints an agent preset. Route
+   polecats and witnesses to `claude-go` and keep the Mayor on your subscription. For
+   Claude Code agent teams, note that teammates share one session's backend, so a team
+   runs entirely on claude-go or entirely on your subscription.
+
+## Limitations
+
+- **Server-side Anthropic tools** such as Claude Code's web search run on Anthropic's API and
+  are not available through Go models. Local tools (Bash, Read, Edit, Grep, WebFetch...) work.
+- **Translation is not lossless.** Extended-thinking blocks, images for non-vision models,
+  and some Anthropic-specific request fields are dropped for Chat Completions and Responses
+  models. The Qwen and MiniMax models avoid translation entirely, so start there if
+  a translated model misbehaves.
+- **Context windows.** Claude Code applies its own default window to model names it
+  doesn't recognize. If a model errors on long sessions, set `CLAUDE_GO_COMPACT_WINDOW`.
+- In `-p` mode Claude Code prints `[claude-code:unrecognized_model]` for non-Anthropic
+  model IDs. This is informational only.
+- **Privacy differs by model.** The Muse Spark "Contributor" models train on your prompts
+  and are disabled in the catalog. Grok and GPT 5.6 Luna have 30-day retention; most others
+  are zero-retention. Check the Privacy table on the Go docs page before sending
+  proprietary code.
+
+## Troubleshooting
+
+| symptom | fix |
+|---|---|
+| `proxy exited during startup` | `claude-go-ctl logs`; usually a YAML typo after editing the catalog: `claude-go-ctl regen` |
+| `port 4141 is in use` | set `CLAUDE_GO_PORT` in `~/.config/claude-go/env` |
+| 401 from upstream | wrong Go key: edit `~/.config/claude-go/env`, `claude-go-ctl restart` |
+| 429 / usage limit | Go quota for that model is exhausted; switch model or wait for the 5-hour window |
+| one translated model fails, others work | `claude-go-ctl test <model>` for the raw error; try the same task on a `messages` model |
+
+## Repository layout
+
+```
+bin/claude-go          launcher (execs claude with proxy env)
+bin/claude-go-ctl      management CLI
+lib/common.sh          shared shell helpers (config, proxy lifecycle)
+config/models.tsv      model catalog: the one file to edit when Go changes
+config/litellm.yaml    generated proxy config (committed so installs need no generation step)
+config/env.example     template for ~/.config/claude-go/env
+config/LITELLM_VERSION pinned LiteLLM release
+scripts/gen-config.sh  catalog -> litellm.yaml
+test/offline.sh        offline end-to-end test (mock Go + real LiteLLM + real Claude Code)
+test/mock_go.py        fake Go API (Messages, Chat Completions, Responses, tool calls)
+install.sh / uninstall.sh
+```
