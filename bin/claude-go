@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # claude-go: Claude Code, running on OpenCode Go models via a local LiteLLM proxy.
 #
-# Every argument is passed straight to `claude`, so anything that works there
-# works here:
+# Every argument after the leading claude-go flags (--once, --no-once) is passed
+# straight to `claude`, so anything that works there works here:
 #   claude-go                          # interactive, default model
 #   claude-go --model kimi-k2.7-code   # pick any model from `claude-go-ctl models`
 #   claude-go -p "explain this repo"   # headless
 #   claude-go --resume
+#   claude-go --once                   # stop the proxy on exit (for one-shot -p workflows)
+#
+# By default the proxy is left running so subsequent `claude-go` calls reuse it
+# ("starts on demand"). With --once, or CLAUDE_GO_STOP_ON_EXIT=1, the proxy is
+# stopped when `claude` returns -- handy for CI and one-shot -p runs. A proxy
+# that was already running (and may be serving other sessions) is left alone.
 #
 # Plain `claude` is untouched and keeps using your Anthropic subscription.
 set -euo pipefail
@@ -21,7 +27,24 @@ CG_REPO="$(cd -P "$(dirname "$cg_self")/.." && pwd)"
 # shellcheck source=../lib/common.sh
 . "$CG_REPO/lib/common.sh"
 
+# Our own flags must come first; everything from the first other argument on is
+# claude's, so e.g. `claude-go -p --once` still sends "--once" as the prompt.
+stop_on_exit="${CLAUDE_GO_STOP_ON_EXIT:-0}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --once)    stop_on_exit=1 ;;
+    --no-once) stop_on_exit=0 ;;
+    *)         break ;;
+  esac
+  shift
+done
+
 cg_load_env
+if [[ $stop_on_exit == 1 ]]; then
+  # Set before starting so Ctrl-C during startup doesn't leave the proxy behind.
+  # The EXIT trap also runs when we're killed by SIGINT/SIGTERM.
+  trap '[[ ${CG_PROXY_STARTED:-0} == 1 ]] && cg_proxy_stop >/dev/null 2>&1; true' EXIT
+fi
 cg_proxy_start "$CG_REPO"
 
 claude_bin="${CLAUDE_GO_CLAUDE_BIN:-$(command -v claude || true)}"
@@ -55,4 +78,10 @@ export CLAUDE_CODE_ATTRIBUTION_HEADER=0           # per-request fingerprint in t
 export CLAUDE_CONFIG_DIR="${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}"
 
 export CLAUDE_GO=1 CLAUDE_GO_SESSION="$sid"   # handy for statuslines and hooks
+
+if [[ $stop_on_exit == 1 && $CG_PROXY_STARTED == 1 ]]; then
+  # No exec here: exec would replace this shell and the EXIT trap would never run.
+  rc=0; "$claude_bin" "$@" || rc=$?
+  exit "$rc"
+fi
 exec "$claude_bin" "$@"
