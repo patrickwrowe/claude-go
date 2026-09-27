@@ -90,6 +90,8 @@ check "proxy leads its own process group" eval '[[ $(ps -o pgid= -p "$pid" | tr 
 # and (without its own group) a proxy that this claude-go started.
 stop; ctrl_c -p hi; sleep 1
 check "SIGINT to claude-go's group leaves proxy up" up
+kill -HUP "$(pidfile)" 2>/dev/null; sleep 1
+check "SIGHUP to the proxy leaves it up" up
 
 echo "== --once"
 out="$(run "$here/bin/claude-go" --once -p hi 2>&1)"
@@ -128,6 +130,10 @@ PATH="$nosetsid" run "$here/bin/claude-go" -p hi >/dev/null 2>&1; rc=$?
 pid="$(pidfile)"
 check "starts without setsid" eval '[[ $rc == 0 ]] && up'
 check "proxy still leads its own process group" eval '[[ -n $pid && $(ps -o pgid= -p "$pid" | tr -d " ") == "$pid" ]]'
+stop; PATH="$nosetsid" ctrl_c -p hi; sleep 1
+check "SIGINT to claude-go's group leaves proxy up" up
+kill -HUP "$(pidfile)" 2>/dev/null; sleep 1
+check "SIGHUP to the proxy leaves it up" up
 stop
 
 echo

@@ -108,7 +108,8 @@ _cg_proxy_start_locked() {
   # foreground group (Ctrl-C during `claude-go -p`) don't reach it: uvicorn
   # installs its own SIGINT handler, which overrides nohup/background SIG_IGN.
   # macOS has no setsid(1); job control (set -m) gives the same new group.
-  local cmd=("$litellm" --config "$repo/config/litellm.yaml" --host 127.0.0.1 --port "$CLAUDE_GO_PORT")
+  # nohup on both paths ignores SIGHUP, as the proxy did before this change.
+  local cmd=(nohup "$litellm" --config "$repo/config/litellm.yaml" --host 127.0.0.1 --port "$CLAUDE_GO_PORT")
   if command -v setsid >/dev/null 2>&1; then
     # A background job of a non-interactive shell isn't a group leader, so
     # setsid(1) execs in place without forking and $! is the proxy's PID.
@@ -116,11 +117,10 @@ _cg_proxy_start_locked() {
     echo $! >"$CG_PID_FILE"
   else
     ( set -m
-      LITELLM_LOCAL_MODEL_COST_MAP=True nohup "${cmd[@]}" >>"$CG_LOG_FILE" 2>&1 </dev/null &
+      LITELLM_LOCAL_MODEL_COST_MAP=True "${cmd[@]}" >>"$CG_LOG_FILE" 2>&1 </dev/null &
       echo $! >"$CG_PID_FILE" )
   fi
   CG_PROXY_STARTED=1
-  disown 2>/dev/null || true
 
   local i
   for ((i = 0; i < timeout; i++)); do
