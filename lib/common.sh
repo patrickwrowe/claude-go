@@ -65,19 +65,17 @@ cg_proxy_pid() {
   [[ -f $CG_PID_FILE ]] || return 1
   local pid; pid="$(cat "$CG_PID_FILE")"
   kill -0 "$pid" 2>/dev/null || return 1
-  # kill -0 succeeds for any PID the OS may have recycled since our last write;
-  # verify the process is actually LiteLLM before treating it as ours.
-  local comm
-  if [[ -r /proc/$pid/comm ]]; then
-    comm="$(< /proc/$pid/comm)"
-  else
-    comm="$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ')"
-  fi
-  [[ $comm == "litellm" ]] && printf '%s\n' "$pid"
+  # kill -0 succeeds for any PID the OS may have recycled since our last write,
+  # so check the command line too. Match args rather than comm: comm is the
+  # interpreter (python3) for env-shebang installs and a full path on macOS.
+  local args; args="$(ps -o args= -p "$pid" 2>/dev/null)" || return 1
+  [[ $args == *litellm* && $args == *"--port ${CLAUDE_GO_PORT:-}"* ]] && printf '%s\n' "$pid"
 }
 
+# Sets CG_PROXY_STARTED=1 when this call launched the proxy (vs. reusing one).
 cg_proxy_start() {
   local repo="$1" timeout="${CLAUDE_GO_START_TIMEOUT:-90}"
+  CG_PROXY_STARTED=0
   cg_proxy_healthy && return 0
   mkdir -p "$CG_STATE_HOME"
 
@@ -106,15 +104,22 @@ _cg_proxy_start_locked() {
   local litellm; litellm="$(cg_litellm_bin)" || return 1
   cg_info "starting LiteLLM proxy on 127.0.0.1:$CLAUDE_GO_PORT (log: $CG_LOG_FILE)"
   printf '\n=== %s start (claude-go %s)\n' "$(date '+%F %T')" "$(cat "$repo/VERSION")" >>"$CG_LOG_FILE"
-  # setsid detaches the proxy into its own session so it's not killed when the
-  # wrapper's controlling terminal or subshell exits, and inherited fds don't
-  # get closed under it. `exec` on the redirect fd keeps the log file open
-  # even if our own shell later closes its copies.
-  LITELLM_LOCAL_MODEL_COST_MAP=True \
-    setsid bash -c 'exec "$0" --config "$1" --host 127.0.0.1 --port "$2" \
-      >>"$3" 2>&1 </dev/null' \
-      "$litellm" "$repo/config/litellm.yaml" "$CLAUDE_GO_PORT" "$CG_LOG_FILE" &
-  echo $! >"$CG_PID_FILE"
+  # Give the proxy its own process group so signals aimed at the terminal's
+  # foreground group (Ctrl-C during `claude-go -p`) don't reach it: uvicorn
+  # installs its own SIGINT handler, which overrides nohup/background SIG_IGN.
+  # macOS has no setsid(1); job control (set -m) gives the same new group.
+  local cmd=("$litellm" --config "$repo/config/litellm.yaml" --host 127.0.0.1 --port "$CLAUDE_GO_PORT")
+  if command -v setsid >/dev/null 2>&1; then
+    # A background job of a non-interactive shell isn't a group leader, so
+    # setsid(1) execs in place without forking and $! is the proxy's PID.
+    LITELLM_LOCAL_MODEL_COST_MAP=True setsid "${cmd[@]}" >>"$CG_LOG_FILE" 2>&1 </dev/null &
+    echo $! >"$CG_PID_FILE"
+  else
+    ( set -m
+      LITELLM_LOCAL_MODEL_COST_MAP=True nohup "${cmd[@]}" >>"$CG_LOG_FILE" 2>&1 </dev/null &
+      echo $! >"$CG_PID_FILE" )
+  fi
+  CG_PROXY_STARTED=1
   disown 2>/dev/null || true
 
   local i

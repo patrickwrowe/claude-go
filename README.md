@@ -37,7 +37,13 @@ claude-go                               # interactive, default model
 claude-go --model kimi-k2.7-code        # any id from `claude-go-ctl models`
 claude-go -p "summarize this repo"      # headless
 claude-go --resume                      # resume an earlier claude-go session
+claude-go --once -p "summarize this"    # stop the proxy afterwards (CI, one-shot runs)
 ```
+
+The proxy stays running between calls so later `claude-go` runs start instantly. `--once`
+(or `CLAUDE_GO_STOP_ON_EXIT=1`) stops it when `claude` exits, but only if that run started
+it, so other sessions sharing the proxy are unaffected. `--once` must come before any
+`claude` arguments.
 
 Inside a session, `/model opus`, `/model sonnet` and `/model haiku` switch between the
 three tier models, and `/model <id>` switches to any other catalog model.
@@ -141,6 +147,12 @@ result must make it back through the translation.
 
 Run it after any change to the catalog, generator, or LiteLLM pin.
 
+`test/lifecycle.sh` needs nothing installed besides `bash`, `curl` and `python3`. A fake
+`litellm` and a fake `claude` exercise `bin/claude-go` and the proxy lifecycle: start on
+demand and reuse, argument pass-through, `--once` teardown (including on Ctrl-C), the proxy
+surviving a Ctrl-C to its terminal, PID-file checks, and the macOS path without `setsid`.
+Run it after any change to `bin/claude-go` or `lib/common.sh`.
+
 ## Rollout plan
 
 1. **One machine, offline.** Clone, `./install.sh`, then `test/offline.sh` (confirms LiteLLM
@@ -197,5 +209,6 @@ config/LITELLM_VERSION pinned LiteLLM release
 scripts/gen-config.sh  catalog -> litellm.yaml
 test/offline.sh        offline end-to-end test (mock Go + real LiteLLM + real Claude Code)
 test/mock_go.py        fake Go API (Messages, Chat Completions, Responses, tool calls)
+test/lifecycle.sh      proxy lifecycle test (fake LiteLLM + fake Claude Code)
 install.sh / uninstall.sh
 ```
