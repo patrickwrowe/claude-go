@@ -7,6 +7,11 @@
 #   claude-go --model kimi-k2.7-code   # pick any model from `claude-go-ctl models`
 #   claude-go -p "explain this repo"   # headless
 #   claude-go --resume
+#   claude-go --once                   # stop the proxy on exit (for one-shot -p workflows)
+#
+# By default the proxy is left running so subsequent `claude-go` calls reuse it
+# ("starts on demand"). With --once, or CLAUDE_GO_STOP_ON_EXIT=1, the proxy is
+# stopped when `claude` returns -- handy for CI and one-shot -p runs.
 #
 # Plain `claude` is untouched and keeps using your Anthropic subscription.
 set -euo pipefail
@@ -26,6 +31,24 @@ cg_proxy_start "$CG_REPO"
 
 claude_bin="${CLAUDE_GO_CLAUDE_BIN:-$(command -v claude || true)}"
 [[ -n $claude_bin ]] || { cg_err "claude (Claude Code) not found on PATH"; exit 1; }
+
+# Pull our own flags out of argv so they don't reach `claude`.
+cg_args=()
+stop_on_exit="${CLAUDE_GO_STOP_ON_EXIT:-0}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --once)   stop_on_exit=1 ;;
+    --no-once) stop_on_exit=0 ;;
+    --help|-h)
+      sed -n '2,17p' "$0"; exit 0 ;;
+    *)        cg_args+=("$1") ;;
+  esac
+  shift
+done
+
+if [[ $stop_on_exit -eq 1 ]]; then
+  trap 'cg_proxy_stop >/dev/null 2>&1 || true' EXIT
+fi
 
 # --- route Claude Code to the proxy ---
 export ANTHROPIC_BASE_URL="$CG_URL"
@@ -55,4 +78,4 @@ export CLAUDE_CODE_ATTRIBUTION_HEADER=0           # per-request fingerprint in t
 export CLAUDE_CONFIG_DIR="${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}"
 
 export CLAUDE_GO=1 CLAUDE_GO_SESSION="$sid"   # handy for statuslines and hooks
-exec "$claude_bin" "$@"
+exec "$claude_bin" "${cg_args[@]}"
