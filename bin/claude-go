@@ -114,8 +114,14 @@ if [[ -n ${CLAUDE_GO_COMPACT_WINDOW:-} ]]; then export CLAUDE_CODE_AUTO_COMPACT_
 # --- Go client etiquette ---
 # Go asks for a stable per-conversation session ID in x-opencode-session (routing +
 # prompt caching). One per claude-go process; the proxy forwards x-* headers upstream.
+# It forwards *every* x-* header, so an inherited ANTHROPIC_CUSTOM_HEADERS (meant for
+# Anthropic, often a gateway token) is dropped: CLAUDE_GO_CUSTOM_HEADERS is the opt-in
+# for headers that should reach OpenCode Go.
 sid="$(cg_uuid)"
-export ANTHROPIC_CUSTOM_HEADERS="x-opencode-session: $sid${ANTHROPIC_CUSTOM_HEADERS:+$'\n'$ANTHROPIC_CUSTOM_HEADERS}"
+if [[ -n ${ANTHROPIC_CUSTOM_HEADERS:-} ]]; then
+  cg_info "not sending ANTHROPIC_CUSTOM_HEADERS to OpenCode Go (use CLAUDE_GO_CUSTOM_HEADERS for headers meant for Go)"
+fi
+export ANTHROPIC_CUSTOM_HEADERS="x-opencode-session: $sid${CLAUDE_GO_CUSTOM_HEADERS:+$'\n'$CLAUDE_GO_CUSTOM_HEADERS}"
 
 # --- compatibility with non-Anthropic backends ---
 export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1   # unknown anthropic-beta values make some backends 400

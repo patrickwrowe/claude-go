@@ -159,6 +159,15 @@ stop
 ctrl_c --once -p hi
 check "--once stops the proxy when interrupted" down
 
+echo "== custom headers"
+# The proxy forwards every x-* header to Go, so the user's Anthropic headers must not ride along.
+ANTHROPIC_CUSTOM_HEADERS="x-corp-gateway-token: CORP-SECRET" run "$here/bin/claude-go" -p hi >/dev/null 2>&1
+check "an inherited ANTHROPIC_CUSTOM_HEADERS is not sent on" eval '! grep -q CORP-SECRET "$work/home/claude.env"'
+check "x-opencode-session is still set" grep -q "^ANTHROPIC_CUSTOM_HEADERS=x-opencode-session: " "$work/home/claude.env"
+CLAUDE_GO_CUSTOM_HEADERS="x-for-go: 1" run "$here/bin/claude-go" -p hi >/dev/null 2>&1
+check "CLAUDE_GO_CUSTOM_HEADERS is added" grep -qx "x-for-go: 1" "$work/home/claude.env"
+stop
+
 echo "== pid file checks"
 sleep 300 & other=$!
 echo "$other" >"$state/proxy.pid"
