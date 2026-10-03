@@ -109,6 +109,10 @@ deny rule cannot be approved. To change these files, edit them outside claude-go
   stable per-conversation session ID for routing and prompt caching;
 - `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` and `CLAUDE_CODE_ATTRIBUTION_HEADER=0`, so
   unknown betas don't cause errors and a per-request fingerprint doesn't defeat prefix caching.
+- commit and PR attribution that names claude-go and the Go model the session started on
+  (`Generated-by: claude-go … session started on minimax-m3, not a Claude model`). Claude
+  Code's default, `Co-Authored-By: Claude Code <noreply@anthropic.com>`, would send anyone
+  tracing a bad change to the wrong model.
 
 `config/litellm.yaml` is **generated** from `config/models.tsv` by `scripts/gen-config.sh`:
 
@@ -303,6 +307,7 @@ test/skill.sh          the mandatory claude-go skill reaches the model (real Cla
 test/guard.sh          destructive-command guard: decision table + real Claude Code
 test/sandbox.sh        the Bash sandbox contains an allowed script (real Claude Code)
 test/deny.sh           file tools cannot touch the key file or guardrails (real Claude Code)
+test/attribution.sh    commit/PR attribution names claude-go and the model (real Claude Code)
 test/fake_proxy.py     fake proxy that logs every request Claude Code sends
 test/claude_harness.sh shared harness for the real-Claude-Code tests
 install.sh / uninstall.sh

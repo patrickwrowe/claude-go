@@ -94,6 +94,14 @@ unset ANTHROPIC_API_KEY CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CO
 
 # --- model tiers (Claude Code's opus/sonnet/haiku aliases map onto Go models) ---
 export ANTHROPIC_MODEL="${CLAUDE_GO_MODEL:-minimax-m3}"                 # --model overrides this
+# The model this session starts on (a --model argument wins), for attribution.
+CG_SESSION_MODEL="$ANTHROPIC_MODEL"; prev=""
+for a in "$@"; do
+  [[ $a == -- ]] && break
+  [[ $prev == --model ]] && CG_SESSION_MODEL="$a"
+  [[ $a == --model=* ]] && CG_SESSION_MODEL="${a#--model=}"
+  prev="$a"
+done
 export ANTHROPIC_DEFAULT_OPUS_MODEL="${CLAUDE_GO_OPUS_MODEL:-kimi-k2.7-code}"
 export ANTHROPIC_DEFAULT_SONNET_MODEL="${CLAUDE_GO_SONNET_MODEL:-minimax-m3}"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="${CLAUDE_GO_HAIKU_MODEL:-qwen3.8-flash}"  # background tasks, titles, Explore

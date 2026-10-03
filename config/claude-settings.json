@@ -1,4 +1,9 @@
 {
+  "attribution": {
+    "commit": "Generated-by: claude-go @CG_VERSION@ (Claude Code on OpenCode Go; session started on @CG_MODEL@, not a Claude model)",
+    "pr": "Generated with claude-go @CG_VERSION@: Claude Code on OpenCode Go, session started on @CG_MODEL@ (not a Claude model)"
+  },
+
   "permissions": {
     "disableBypassPermissionsMode": "disable",
     "disableAutoMode": "disable",
