@@ -51,7 +51,6 @@ for a in "$@"; do
       exit 2 ;;
   esac
 done
-cg_settings="$(cg_claude_settings "$CG_REPO")" || exit 1
 
 cg_load_env
 if [[ $stop_on_exit == 1 ]]; then
@@ -96,6 +95,7 @@ export CLAUDE_GO=1 CLAUDE_GO_SESSION="$sid"   # handy for statuslines and hooks
 # --- guardrails for non-Anthropic models (config/claude-settings.json) ---
 # Passed as flag settings, which outrank ~/.claude-go/settings.json and a
 # repository's .claude/settings*.json. Ours go first so `--` still works.
+cg_settings="$(cg_claude_settings "$CG_REPO")" || exit 1
 claude_args=(--settings "$cg_settings")
 
 if [[ $stop_on_exit == 1 && $CG_PROXY_STARTED == 1 ]]; then
