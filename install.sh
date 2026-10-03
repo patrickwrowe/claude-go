@@ -12,6 +12,8 @@ BIN_DIR="${CLAUDE_GO_BIN_DIR:-$HOME/.local/bin}"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/claude-go"
 ENV_FILE="$CONFIG_HOME/env"
 CLAUDE_GO_HOME="${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}"
+STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}/claude-go"
+LITELLM_OWNER="$STATE_HOME/litellm-installed-by-claude-go"   # so uninstall.sh only removes ours
 YES=0; LITELLM_ONLY=0
 for a in "$@"; do
   case "$a" in
@@ -55,8 +57,14 @@ esac
 if [[ $current == "$PIN" ]]; then
   say "LiteLLM $PIN already installed"
 else
+  if [[ -n $current && ! -f $LITELLM_OWNER ]]; then
+    # Someone else's LiteLLM: replacing it would break whatever else uses it.
+    [[ "$(ask "LiteLLM $current is installed, but not by claude-go. Replace it with $PIN? (y/n)" n)" == y ]] \
+      || die "kept your LiteLLM $current. claude-go needs $PIN: uv tool install --force 'litellm[proxy]==$PIN', then re-run"
+  fi
   say "installing LiteLLM $PIN (proxy extra) with uv"
   "$UV" tool install --force --python 3.12 "litellm[proxy]==$PIN"
+  mkdir -p "$STATE_HOME"; echo "$PIN" >"$LITELLM_OWNER"
 fi
 [[ $LITELLM_ONLY -eq 1 ]] && exit 0
 

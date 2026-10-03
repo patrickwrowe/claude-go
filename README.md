@@ -258,6 +258,9 @@ the proxy and logs every request in full. The test needs `claude` and `python3`,
 LiteLLM, key or network. Run it after any change to `config/claude-settings.json` and after
 upgrading Claude Code. `test/bypass.sh` does the same for bypass mode and the `dontAsk`
 mode that the Gas Town preset uses.
+`test/uninstall.sh` runs `install.sh` and `uninstall.sh` in a throwaway HOME with a fake
+`uv`. It checks that `--purge` never deletes a home directory or `~/.claude`, and that
+neither script removes or replaces a LiteLLM that claude-go didn't install.
 
 ## Rollout plan
 
@@ -333,4 +336,5 @@ test/attribution.sh    commit/PR attribution names claude-go and the model (real
 test/fake_proxy.py     fake proxy that logs every request Claude Code sends
 test/claude_harness.sh shared harness for the real-Claude-Code tests
 install.sh / uninstall.sh
+install.sh / uninstall.sh   (uninstall.sh --purge also deletes keys, state and sessions)
 ```
