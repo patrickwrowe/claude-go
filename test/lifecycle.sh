@@ -87,6 +87,14 @@ echo "== start on demand, reuse, pass-through"
 out="$(run "$here/bin/claude-go" -p hi 2>&1)"
 check "starts proxy on demand" up
 check "claude gets args unchanged" grep -qF 'claude args: [-p][hi]' <<<"$out"
+for bad in CLAUDE_GO_HAIKU_MODEL=qwen3.8-flsh CLAUDE_GO_MODEL=muse-spark-1.3-contributor CLAUDE_GO_SUBAGENT_MODEL=nope; do
+  out="$(run env "$bad" "$here/bin/claude-go" -p hi 2>&1)"; rc=$?
+  check "tier $bad (typo / disabled) is refused at launch" eval '[[ $rc != 0 ]] && grep -q "not an enabled model" <<<"$out" && ! grep -q "claude args" <<<"$out"'
+done
+out="$(run env CLAUDE_GO_MODEL=opus CLAUDE_GO_HAIKU_MODEL='glm-5.3-flash[1m]' "$here/bin/claude-go" -p hi 2>&1)"
+check "aliases and [1m] suffixes are accepted" grep -qF 'claude args: [-p][hi]' <<<"$out"
+out="$(run env CLAUDE_GO_HAIKU_MODEL=nope OPENCODE_GO_BASE=http://127.0.0.1:9 "$here/bin/claude-go-ctl" doctor 2>&1)"
+check "doctor reports the bad tier" grep -q "CLAUDE_GO_HAIKU_MODEL=nope is not an enabled model" <<<"$out"
 out="$(run "$here/bin/claude-go" --help 2>&1)"
 check "second run reuses proxy" eval '! grep -q "starting LiteLLM" <<<"$out"'
 check "--help goes to claude" grep -qF 'claude args: [--help]' <<<"$out"

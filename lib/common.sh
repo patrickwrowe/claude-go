@@ -12,6 +12,16 @@ CG_LOCK_DIR="$CG_STATE_HOME/start.lock"
 cg_err()  { printf 'claude-go: %s\n' "$*" >&2; }
 cg_info() { [[ -n ${CLAUDE_GO_QUIET:-} ]] || printf 'claude-go: %s\n' "$*" >&2; }
 
+# Is $2 an enabled model in the catalog in $1 (or an opus/sonnet/haiku alias)?
+cg_model_enabled() {
+  local id="${2%%\[*}" mid proto enabled rest   # drop a "[1m]"-style suffix
+  case "$id" in opus|sonnet|haiku) return 0 ;; esac
+  while IFS=$'\t' read -r mid proto enabled rest; do
+    [[ $mid == "$id" && $enabled == yes ]] && return 0
+  done <"$1/config/models.tsv"
+  return 1
+}
+
 # ---------- configuration ----------
 cg_load_env() {
   if [[ ! -f $CG_ENV_FILE ]]; then

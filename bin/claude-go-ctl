@@ -155,6 +155,13 @@ cmd_doctor() {
   [[ ${#OPENCODE_GO_API_KEY} -gt 10 ]] && ok "OPENCODE_GO_API_KEY set" || no "OPENCODE_GO_API_KEY looks empty"
   [[ -f $CG_REPO/config/litellm.yaml ]] && ok "config/litellm.yaml ($(grep -c '^  - model_name:' "$CG_REPO/config/litellm.yaml") models)" || no "config/litellm.yaml missing (claude-go-ctl regen)"
   if [[ $CG_REPO/config/models.tsv -nt $CG_REPO/config/litellm.yaml ]]; then warn "models.tsv is newer than litellm.yaml (claude-go-ctl regen)"; fi
+  local tier name m
+  for tier in CLAUDE_GO_MODEL:minimax-m3 CLAUDE_GO_OPUS_MODEL:kimi-k2.7-code CLAUDE_GO_SONNET_MODEL:minimax-m3 \
+              CLAUDE_GO_HAIKU_MODEL:qwen3.8-flash CLAUDE_GO_SUBAGENT_MODEL:; do
+    name="${tier%%:*}"; m="${!name:-${tier#*:}}"
+    [[ -z $m ]] && continue
+    if cg_model_enabled "$CG_REPO" "$m"; then ok "$name $m"; else no "$name=$m is not an enabled model in config/models.tsv"; fi
+  done
   local cfg="${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}"
   [[ -d $cfg ]] && ok "Claude Code config dir $cfg" || warn "$cfg does not exist yet (created on first run)"
   local item missing

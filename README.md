@@ -81,6 +81,12 @@ Secrets and personal settings live **outside the repo** in `~/.config/claude-go/
 | `CLAUDE_GO_CONFIG_DIR` | `~/.claude-go` | Claude Code state for claude-go sessions |
 | `CLAUDE_GO_CUSTOM_HEADERS` | unset | extra request headers for Go, one `name: value` per line |
 
+`claude-go` refuses to start when a tier names a model that isn't enabled in
+`config/models.tsv`, such as a typo, a retired model or a disabled "contributor" model.
+Otherwise the mistake would only surface when that tier is first used, and for the haiku
+tier that happens quietly, in background work. `claude-go-ctl doctor` checks the tiers
+too. The aliases `opus`, `sonnet` and `haiku` and a `[1m]` suffix are accepted.
+
 Tier defaults favour models that are both capable and generous under Go's quotas.
 Qwen3.8 Max, Qwen3.7 Max, Kimi K3, GLM-5.3 and Grok have small quotas (a few hundred
 requests per 5 hours), so avoid them as the default or haiku tier.
