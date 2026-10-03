@@ -154,6 +154,18 @@ because each switches off hooks, plugins and CLAUDE.md.
 `claude-go` refuses a `--settings` argument, because Claude Code keeps only the last one
 and would drop these. Put personal settings in `~/.claude-go/settings.json`.
 
+**Destructive commands need a person.** `claude/plugins/claude-go-guard` adds a PreToolUse
+hook (`hooks/guard.py`). It answers "ask" for Bash commands that destroy work or rewrite
+shared history, so a person must approve them even where an allow rule, `acceptEdits` or
+`dontAsk` would let them run. Headless runs refuse them and tell the model why. Claude
+Code already asks before `rm -rf` outside the repo. It does not ask for git: with an
+allow rule such as `Bash(git:*)`, it runs `git reset --hard`, `git checkout -- .`,
+`git clean -fdx` and `git push --force` unasked. The guard covers those, plus `rm -r` of
+the whole repo or anything outside it, `find -delete` outside it, recursive
+`chmod`/`chown` of the home directory, `curl | sh`, `dd` onto devices and `mkfs`. It
+catches mistakes. It is not a security boundary, because an obfuscated command can get
+past any parser. Commands it cannot parse go to a person.
+
 ## Maintenance
 
 **New or retired Go models.** Run `claude-go-ctl sync-models`. For each new ID, look up
@@ -255,7 +267,8 @@ config/litellm.yaml    generated proxy config (committed so installs need no gen
 config/env.example     template for ~/.config/claude-go/env
 config/LITELLM_VERSION pinned LiteLLM release
 config/claude-settings.json  guardrails passed to every session with --settings
-claude/plugins/        plugins loaded into every session (claude-go: the mandatory skill)
+claude/plugins/        plugins loaded into every session (claude-go: the mandatory skill;
+                       claude-go-guard: destructive commands)
 scripts/gen-config.sh  catalog -> litellm.yaml
 test/offline.sh        offline end-to-end test (mock Go + real LiteLLM + real Claude Code)
 test/mock_go.py        fake Go API (Messages, Chat Completions, Responses, tool calls)
@@ -263,6 +276,7 @@ test/lifecycle.sh      proxy lifecycle test (fake LiteLLM + fake Claude Code)
 test/settings.sh       guardrail test (fake proxy + real Claude Code)
 test/bypass.sh         bypass mode stays off; dontAsk preset (real Claude Code)
 test/skill.sh          the mandatory claude-go skill reaches the model (real Claude Code)
+test/guard.sh          destructive-command guard: decision table + real Claude Code
 test/fake_proxy.py     fake proxy that logs every request Claude Code sends
 test/claude_harness.sh shared harness for the real-Claude-Code tests
 install.sh / uninstall.sh

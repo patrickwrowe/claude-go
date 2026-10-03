@@ -108,6 +108,7 @@ for v in CLAUDE_CODE_SIMPLE CLAUDE_CODE_SAFE_MODE; do
 done
 out="$(run "$here/bin/claude-go" --settings '{}' -p hi 2>&1)"; rc=$?
 check "a user --settings is refused (it would replace ours)" eval '[[ $rc == 2 ]] && ! grep -q "claude args" <<<"$out"'
+check "claude gets the destructive-command guard via --plugin-dir" eval '[[ -f $(tail -1 "$work/home/claude-plugin-dirs")/claude-go-guard/hooks/hooks.json ]]'
 out="$(run "$here/bin/claude-go" -p -- --settings 2>&1)"
 check "--settings after -- is just text for claude" grep -qF 'claude args: [-p][--][--settings]' <<<"$out"
 for flags in --dangerously-skip-permissions --allow-dangerously-skip-permissions \

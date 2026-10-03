@@ -1,0 +1,5 @@
+{
+  "name": "claude-go-guard",
+  "version": "0.1.0",
+  "description": "Sends destructive Bash commands to a person for approval in claude-go sessions"
+}
