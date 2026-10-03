@@ -140,6 +140,17 @@ switch these back. To change one, edit the file in your clone.
 - **Hooks stay on** (`disableAllHooks: false`), so a cloned repository's settings cannot
   switch off your hooks.
 
+**The claude-go skill is mandatory.** `claude/plugins/claude-go` is loaded into every
+session with `--plugin-dir`. Normally the model decides whether to load a skill, and a
+model that is drifting from its instructions is the one least likely to. So the plugin's
+SessionStart hook puts the full text of `skills/claude-go/SKILL.md` in front of the model
+at startup and again after compaction. Resumed sessions keep it in their history. The
+rules cover following CLAUDE.md, treating permission denials as final, stopping before
+destructive or outward-facing actions, keeping secrets, and checking and honestly
+reporting its own work. Edit SKILL.md to change them. `claude-go` refuses `--bare` and
+`--safe-mode`, and `CLAUDE_CODE_SIMPLE` / `CLAUDE_CODE_SAFE_MODE` in the environment,
+because each switches off hooks, plugins and CLAUDE.md.
+
 `claude-go` refuses a `--settings` argument, because Claude Code keeps only the last one
 and would drop these. Put personal settings in `~/.claude-go/settings.json`.
 
@@ -244,12 +255,14 @@ config/litellm.yaml    generated proxy config (committed so installs need no gen
 config/env.example     template for ~/.config/claude-go/env
 config/LITELLM_VERSION pinned LiteLLM release
 config/claude-settings.json  guardrails passed to every session with --settings
+claude/plugins/        plugins loaded into every session (claude-go: the mandatory skill)
 scripts/gen-config.sh  catalog -> litellm.yaml
 test/offline.sh        offline end-to-end test (mock Go + real LiteLLM + real Claude Code)
 test/mock_go.py        fake Go API (Messages, Chat Completions, Responses, tool calls)
 test/lifecycle.sh      proxy lifecycle test (fake LiteLLM + fake Claude Code)
 test/settings.sh       guardrail test (fake proxy + real Claude Code)
 test/bypass.sh         bypass mode stays off; dontAsk preset (real Claude Code)
+test/skill.sh          the mandatory claude-go skill reaches the model (real Claude Code)
 test/fake_proxy.py     fake proxy that logs every request Claude Code sends
 test/claude_harness.sh shared harness for the real-Claude-Code tests
 install.sh / uninstall.sh
