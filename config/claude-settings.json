@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "disableAutoMode": "disable",
+    "deny": [
+    ]
+  },
+  "disableAllHooks": false
+}

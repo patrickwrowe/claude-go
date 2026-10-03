@@ -39,6 +39,20 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+# claude-go's guardrails reach Claude Code as one --settings flag (see below).
+# Claude Code keeps only the last --settings it is given, so a second one would
+# silently discard them.
+for a in "$@"; do
+  case "$a" in
+    --) break ;;
+    --settings|--settings=*)
+      cg_err "claude-go already passes --settings (config/claude-settings.json); a second one would replace it."
+      cg_err "put personal settings in ~/.claude-go/settings.json (or \$CLAUDE_GO_CONFIG_DIR/settings.json) instead."
+      exit 2 ;;
+  esac
+done
+cg_settings="$(cg_claude_settings "$CG_REPO")" || exit 1
+
 cg_load_env
 if [[ $stop_on_exit == 1 ]]; then
   # Set before starting so Ctrl-C during startup doesn't leave the proxy behind.
@@ -79,9 +93,14 @@ export CLAUDE_CONFIG_DIR="${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}"
 
 export CLAUDE_GO=1 CLAUDE_GO_SESSION="$sid"   # handy for statuslines and hooks
 
+# --- guardrails for non-Anthropic models (config/claude-settings.json) ---
+# Passed as flag settings, which outrank ~/.claude-go/settings.json and a
+# repository's .claude/settings*.json. Ours go first so `--` still works.
+claude_args=(--settings "$cg_settings")
+
 if [[ $stop_on_exit == 1 && $CG_PROXY_STARTED == 1 ]]; then
   # No exec here: exec would replace this shell and the EXIT trap would never run.
-  rc=0; "$claude_bin" "$@" || rc=$?
+  rc=0; "$claude_bin" "${claude_args[@]}" "$@" || rc=$?
   exit "$rc"
 fi
-exec "$claude_bin" "$@"
+exec "$claude_bin" "${claude_args[@]}" "$@"

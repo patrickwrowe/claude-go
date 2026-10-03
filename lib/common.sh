@@ -39,6 +39,18 @@ cg_load_env() {
   CG_URL="http://127.0.0.1:$CLAUDE_GO_PORT"
 }
 
+# ---------- Claude Code settings layer ----------
+# config/claude-settings.json goes to every claude-go session as --settings.
+# Flag settings outrank user (~/.claude-go/settings.json) and project
+# (.claude/settings*.json) settings, so a cloned repository can't undo them.
+# @CG_REPO@ in the file stands for this checkout's path.
+cg_claude_settings() {
+  local repo="$1" f="$1/config/claude-settings.json"
+  [[ -f $f ]] || { cg_err "missing $f"; return 1; }
+  case "$repo" in *[\"\\\|\&]*) cg_err "cannot use a claude-go checkout whose path contains \" \\ | or &: $repo"; return 1 ;; esac
+  sed "s|@CG_REPO@|$repo|g" "$f"
+}
+
 cg_litellm_bin() {
   local b="${CLAUDE_GO_LITELLM_BIN:-}"
   [[ -z $b ]] && b="$(command -v litellm 2>/dev/null || true)"

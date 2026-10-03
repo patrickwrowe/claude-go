@@ -116,6 +116,26 @@ headers upstream, which carries the session headers. Two proxy settings matter:
 reject, and `use_chat_completions_url_for_anthropic_messages: true` stops LiteLLM
 1.10x from sending Chat Completions models to the Responses API.
 
+## Guardrails
+
+Claude Code's defaults assume a Claude model is driving it, and some of them hand safety
+decisions to that model. Under claude-go the model is a Go model, so
+`config/claude-settings.json` overrides those defaults for every claude-go session.
+`bin/claude-go` passes the file with `--settings`. Flag settings outrank
+`~/.claude-go/settings.json` and a repository's `.claude/settings*.json`, so neither can
+switch these back. To change one, edit the file in your clone.
+
+- **Auto mode is off** (`permissions.disableAutoMode`). Auto mode lets a classifier approve
+  tool calls in your place, and Claude Code runs that classifier on the sonnet-tier model,
+  which is `CLAUDE_GO_SONNET_MODEL` here. With a fresh `~/.claude-go`, Claude Code 2.1.288
+  started `-p` runs in auto mode. Sessions now start in the ask-before-acting mode, and
+  `--permission-mode auto` is refused.
+- **Hooks stay on** (`disableAllHooks: false`), so a cloned repository's settings cannot
+  switch off your hooks.
+
+`claude-go` refuses a `--settings` argument, because Claude Code keeps only the last one
+and would drop these. Put personal settings in `~/.claude-go/settings.json`.
+
 ## Maintenance
 
 **New or retired Go models.** Run `claude-go-ctl sync-models`. For each new ID, look up
@@ -152,6 +172,12 @@ Run it after any change to the catalog, generator, or LiteLLM pin.
 demand and reuse, argument pass-through, `--once` teardown (including on Ctrl-C), the proxy
 surviving a Ctrl-C to its terminal, PID-file checks, and the macOS path without `setsid`.
 Run it after any change to `bin/claude-go` or `lib/common.sh`.
+
+`test/settings.sh` checks the guardrails against the installed Claude Code, which also
+catches a Claude Code upgrade that renames a setting. `test/fake_proxy.py` stands in for
+the proxy and logs every request in full. The test needs `claude` and `python3`, but no
+LiteLLM, key or network. Run it after any change to `config/claude-settings.json` and after
+upgrading Claude Code.
 
 ## Rollout plan
 
@@ -206,9 +232,12 @@ config/models.tsv      model catalog: the one file to edit when Go changes
 config/litellm.yaml    generated proxy config (committed so installs need no generation step)
 config/env.example     template for ~/.config/claude-go/env
 config/LITELLM_VERSION pinned LiteLLM release
+config/claude-settings.json  guardrails passed to every session with --settings
 scripts/gen-config.sh  catalog -> litellm.yaml
 test/offline.sh        offline end-to-end test (mock Go + real LiteLLM + real Claude Code)
 test/mock_go.py        fake Go API (Messages, Chat Completions, Responses, tool calls)
 test/lifecycle.sh      proxy lifecycle test (fake LiteLLM + fake Claude Code)
+test/settings.sh       guardrail test (fake proxy + real Claude Code)
+test/fake_proxy.py     fake proxy that logs every request Claude Code sends
 install.sh / uninstall.sh
 ```
