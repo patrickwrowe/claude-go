@@ -122,15 +122,24 @@ cg_proxy_start() {
   mkdir -p "$CG_STATE_HOME"
 
   # Serialize concurrent starts (e.g. several claude-go sessions launched at once).
-  local waited=0
+  # The holder's pid goes in the lock, so a lock left by a claude-go that was
+  # killed mid-start (kill -9, OOM, reboot: it lives in ~/.local/state) is
+  # broken at once instead of after the whole timeout.
+  local waited=0 holder
   until mkdir "$CG_LOCK_DIR" 2>/dev/null; do
-    if (( waited > timeout )); then cg_err "stale lock $CG_LOCK_DIR; removing"; rmdir "$CG_LOCK_DIR" 2>/dev/null; continue; fi
+    holder="$(cat "$CG_LOCK_DIR/pid" 2>/dev/null || true)"
+    if [[ -n $holder ]] && ! kill -0 "$holder" 2>/dev/null || (( waited > timeout )); then
+      cg_err "removing stale lock $CG_LOCK_DIR${holder:+ (pid $holder)}"
+      rm -f "$CG_LOCK_DIR/pid"; rmdir "$CG_LOCK_DIR" 2>/dev/null
+      waited=0; continue
+    fi
     sleep 1; waited=$((waited + 1))
     cg_proxy_healthy && return 0
   done
+  echo $$ >"$CG_LOCK_DIR/pid"
   local rc=0
   _cg_proxy_start_locked "$repo" "$timeout" || rc=$?
-  rmdir "$CG_LOCK_DIR" 2>/dev/null
+  rm -f "$CG_LOCK_DIR/pid"; rmdir "$CG_LOCK_DIR" 2>/dev/null
   return $rc
 }
 
