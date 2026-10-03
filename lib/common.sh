@@ -167,3 +167,26 @@ cg_proxy_stop() {
   fi
   rm -f "$CG_PID_FILE"
 }
+
+# ---------- plain claude's ~/.claude ----------
+# claude-go sessions use their own Claude Code config dir ($1), so plain
+# claude's ~/.claude is invisible to them unless install.sh linked it in.
+# Prints each instructions/tooling item of ~/.claude that a session can't see.
+cg_unshared_claude_items() {
+  local cfg="$1" item
+  for item in CLAUDE.md skills agents commands; do
+    if [[ -e $HOME/.claude/$item && ! -e $cfg/$item ]]; then printf '%s\n' "$item"; fi
+  done
+}
+
+# Top-level keys of ~/.claude/settings.json that change what a session may do
+# but are missing from claude-go's own settings.json (never shared: it also
+# holds the Anthropic model choice).
+cg_unshared_claude_settings() {
+  local cfg="$1" key
+  [[ -f $HOME/.claude/settings.json ]] || return 0
+  for key in permissions hooks sandbox; do
+    if grep -q "\"$key\"[[:space:]]*:" "$HOME/.claude/settings.json" \
+       && ! grep -q "\"$key\"[[:space:]]*:" "$cfg/settings.json" 2>/dev/null; then printf '%s\n' "$key"; fi
+  done
+}

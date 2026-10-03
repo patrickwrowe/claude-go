@@ -130,6 +130,9 @@ export CLAUDE_CODE_ATTRIBUTION_HEADER=0           # per-request fingerprint in t
 # --- keep Claude Code state separate from your subscription setup ---
 # (model choices made with /model here would otherwise leak into plain `claude`)
 export CLAUDE_CONFIG_DIR="${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}"
+if [[ -n $(cg_unshared_claude_items "$CLAUDE_CONFIG_DIR")$(cg_unshared_claude_settings "$CLAUDE_CONFIG_DIR") ]]; then
+  cg_info "some of ~/.claude (instructions, skills or safety settings) does not apply to claude-go sessions; see: claude-go-ctl doctor"
+fi
 
 export CLAUDE_GO=1 CLAUDE_GO_SESSION="$sid"   # handy for statuslines and hooks
 

@@ -156,6 +156,15 @@ cmd_doctor() {
   if [[ $CG_REPO/config/models.tsv -nt $CG_REPO/config/litellm.yaml ]]; then warn "models.tsv is newer than litellm.yaml (claude-go-ctl regen)"; fi
   local cfg="${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}"
   [[ -d $cfg ]] && ok "Claude Code config dir $cfg" || warn "$cfg does not exist yet (created on first run)"
+  local item missing
+  missing="$(cg_unshared_claude_items "$cfg")"
+  while read -r item; do
+    [[ -n $item ]] && warn "~/.claude/$item is not seen by claude-go sessions (share it: ln -s ~/.claude/$item $cfg/$item)"
+  done <<<"$missing"
+  missing="$(cg_unshared_claude_settings "$cfg")"
+  while read -r item; do
+    [[ -n $item ]] && warn "\"$item\" in ~/.claude/settings.json does not apply to claude-go; copy what you need to $cfg/settings.json"
+  done <<<"$missing"
 
   echo "upstream"
   local code
