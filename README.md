@@ -27,6 +27,7 @@ claude-go                     # Claude Code on Go (default model: minimax-m3)
 ```
 
 Requirements: Linux or macOS (WSL on Windows), `bash`, `curl`, `git`, and Claude Code.
+On Linux, also `bubblewrap` and `socat` for the Bash sandbox (see Guardrails).
 The installer offers to install [uv](https://docs.astral.sh/uv/) if missing, then uses
 it to install the pinned LiteLLM into an isolated tool environment.
 
@@ -139,6 +140,21 @@ switch these back. To change one, edit the file in your clone.
   session never waits on a prompt.
 - **Hooks stay on** (`disableAllHooks: false`), so a cloned repository's settings cannot
   switch off your hooks.
+- **Bash runs in Claude Code's sandbox** (`sandbox`). It contains commands you approve,
+  including scripts whose contents Claude Code cannot inspect, such as `npm test`. Such
+  commands can write inside the working directory but not elsewhere in your home
+  directory, `~/.claude`, claude-go's settings or this checkout's `bin`, `lib`, `config`
+  and `claude`. They cannot read the key file, and they do not see `OPENCODE_GO_API_KEY`
+  or the proxy key. Network access needs approval per host. Allow hosts with
+  `sandbox.network.allowedDomains` in `~/.claude-go/settings.json`. Each sandboxed
+  command still asks for permission (`autoAllowBashIfSandboxed: false`), because
+  Claude Code's default auto-allows them. The model cannot opt a command out of the
+  sandbox (`allowUnsandboxedCommands: false`). Under Claude Code's default, it could do
+  that and run an allowed command unsandboxed without a prompt. List commands that
+  cannot work sandboxed, such as `docker`, under `sandbox.excludedCommands` in
+  `~/.claude-go/settings.json`. They still ask for permission. On Linux the sandbox needs `bubblewrap` and
+  `socat`. Without them Claude Code warns and runs Bash unsandboxed, and
+  `claude-go-ctl doctor` flags it.
 
 **The claude-go skill is mandatory.** `claude/plugins/claude-go` is loaded into every
 session with `--plugin-dir`. Normally the model decides whether to load a skill, and a
@@ -277,6 +293,7 @@ test/settings.sh       guardrail test (fake proxy + real Claude Code)
 test/bypass.sh         bypass mode stays off; dontAsk preset (real Claude Code)
 test/skill.sh          the mandatory claude-go skill reaches the model (real Claude Code)
 test/guard.sh          destructive-command guard: decision table + real Claude Code
+test/sandbox.sh        the Bash sandbox contains an allowed script (real Claude Code)
 test/fake_proxy.py     fake proxy that logs every request Claude Code sends
 test/claude_harness.sh shared harness for the real-Claude-Code tests
 install.sh / uninstall.sh
