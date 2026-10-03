@@ -130,6 +130,13 @@ switch these back. To change one, edit the file in your clone.
   which is `CLAUDE_GO_SONNET_MODEL` here. With a fresh `~/.claude-go`, Claude Code 2.1.288
   started `-p` runs in auto mode. Sessions now start in the ask-before-acting mode, and
   `--permission-mode auto` is refused.
+- **Bypass mode is off** (`permissions.disableBypassPermissionsMode`). Under bypass mode,
+  a Go model runs every command without asking. Claude Code would only downgrade the
+  request without saying so, so `claude-go` itself refuses `--dangerously-skip-permissions`,
+  `--allow-dangerously-skip-permissions` and `--permission-mode bypassPermissions`. For
+  unattended runs, use `--permission-mode dontAsk` and list what the session may do under
+  `permissions.allow` in `~/.claude-go/settings.json`. Anything else is denied, and the
+  session never waits on a prompt.
 - **Hooks stay on** (`disableAllHooks: false`), so a cloned repository's settings cannot
   switch off your hooks.
 
@@ -177,7 +184,8 @@ Run it after any change to `bin/claude-go` or `lib/common.sh`.
 catches a Claude Code upgrade that renames a setting. `test/fake_proxy.py` stands in for
 the proxy and logs every request in full. The test needs `claude` and `python3`, but no
 LiteLLM, key or network. Run it after any change to `config/claude-settings.json` and after
-upgrading Claude Code.
+upgrading Claude Code. `test/bypass.sh` does the same for bypass mode and the `dontAsk`
+mode that the Gas Town preset uses.
 
 ## Rollout plan
 
@@ -190,7 +198,10 @@ upgrading Claude Code.
    adjust tiers in `~/.config/claude-go/env`. Watch usage at https://opencode.ai/auth.
 4. **Commit the tuning.** Put good defaults in `config/env.example` or the catalog notes,
    push, and install on your other machines.
-5. **Orchestration (optional).** `claude-go-ctl gastown` prints an agent preset. Route
+5. **Orchestration (optional).** `claude-go-ctl gastown` prints an agent preset. It uses
+   `--permission-mode dontAsk` rather than the built-in Claude preset's
+   `--dangerously-skip-permissions`, so first allow what polecats need in
+   `~/.claude-go/settings.json`. Route
    polecats and witnesses to `claude-go` and keep the Mayor on your subscription. For
    Claude Code agent teams, note that teammates share one session's backend, so a team
    runs entirely on claude-go or entirely on your subscription.
@@ -238,6 +249,7 @@ test/offline.sh        offline end-to-end test (mock Go + real LiteLLM + real Cl
 test/mock_go.py        fake Go API (Messages, Chat Completions, Responses, tool calls)
 test/lifecycle.sh      proxy lifecycle test (fake LiteLLM + fake Claude Code)
 test/settings.sh       guardrail test (fake proxy + real Claude Code)
+test/bypass.sh         bypass mode stays off; dontAsk preset (real Claude Code)
 test/fake_proxy.py     fake proxy that logs every request Claude Code sends
 test/claude_harness.sh shared harness for the real-Claude-Code tests
 install.sh / uninstall.sh

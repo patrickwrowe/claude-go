@@ -100,6 +100,14 @@ out="$(run "$here/bin/claude-go" --settings '{}' -p hi 2>&1)"; rc=$?
 check "a user --settings is refused (it would replace ours)" eval '[[ $rc == 2 ]] && ! grep -q "claude args" <<<"$out"'
 out="$(run "$here/bin/claude-go" -p -- --settings 2>&1)"
 check "--settings after -- is just text for claude" grep -qF 'claude args: [-p][--][--settings]' <<<"$out"
+for flags in --dangerously-skip-permissions --allow-dangerously-skip-permissions \
+             "--permission-mode bypassPermissions" --permission-mode=bypassPermissions; do
+  # shellcheck disable=SC2086
+  out="$(run "$here/bin/claude-go" -p hi $flags 2>&1)"; rc=$?
+  check "bypass mode is refused: $flags" eval '[[ $rc == 2 ]] && grep -q "bypassPermissions mode is disabled" <<<"$out" && ! grep -q "claude args" <<<"$out"'
+done
+out="$(run "$here/bin/claude-go" -p hi --permission-mode default 2>&1)"
+check "other permission modes pass through" grep -qF 'claude args: [-p][hi][--permission-mode][default]' <<<"$out"
 
 echo "== process group"
 pid="$(pidfile)"

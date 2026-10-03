@@ -42,6 +42,13 @@ done
 # claude-go's guardrails reach Claude Code as one --settings flag (see below).
 # Claude Code keeps only the last --settings it is given, so a second one would
 # silently discard them.
+cg_refuse_bypass() {
+  cg_err "bypassPermissions mode is disabled for claude-go (config/claude-settings.json): it would let a Go model"
+  cg_err "run every command unasked. Claude Code would silently fall back to prompting, which hangs unattended runs."
+  cg_err "grant what the session needs with permissions.allow in ~/.claude-go/settings.json (e.g. with --permission-mode dontAsk)."
+  exit 2
+}
+prev=""
 for a in "$@"; do
   case "$a" in
     --) break ;;
@@ -49,7 +56,11 @@ for a in "$@"; do
       cg_err "claude-go already passes --settings (config/claude-settings.json); a second one would replace it."
       cg_err "put personal settings in ~/.claude-go/settings.json (or \$CLAUDE_GO_CONFIG_DIR/settings.json) instead."
       exit 2 ;;
+    --dangerously-skip-permissions|--allow-dangerously-skip-permissions|--permission-mode=bypassPermissions)
+      cg_refuse_bypass ;;
   esac
+  [[ $prev == --permission-mode && $a == bypassPermissions ]] && cg_refuse_bypass
+  prev="$a"
 done
 
 cg_load_env
