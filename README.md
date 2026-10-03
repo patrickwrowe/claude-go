@@ -239,5 +239,6 @@ test/mock_go.py        fake Go API (Messages, Chat Completions, Responses, tool 
 test/lifecycle.sh      proxy lifecycle test (fake LiteLLM + fake Claude Code)
 test/settings.sh       guardrail test (fake proxy + real Claude Code)
 test/fake_proxy.py     fake proxy that logs every request Claude Code sends
+test/claude_harness.sh shared harness for the real-Claude-Code tests
 install.sh / uninstall.sh
 ```
