@@ -51,6 +51,7 @@ cmd_status() {
     local n
     n="$(cg_curl_auth "$LITELLM_MASTER_KEY" -s -m 5 "$CG_URL/v1/models" | grep -o '"id"' | wc -l | tr -d ' ')"
     echo "proxy: healthy on $CG_URL (pid ${pid:-unknown}), $n models"
+    cg_proxy_stale_warning "$CG_REPO"
   else
     echo "proxy: not running (${pid:+stale pid $pid, }port $CLAUDE_GO_PORT)"
   fi

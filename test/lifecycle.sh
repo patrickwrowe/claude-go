@@ -90,6 +90,13 @@ check "claude gets args unchanged" grep -qF 'claude args: [-p][hi]' <<<"$out"
 out="$(run "$here/bin/claude-go" --help 2>&1)"
 check "second run reuses proxy" eval '! grep -q "starting LiteLLM" <<<"$out"'
 check "--help goes to claude" grep -qF 'claude args: [--help]' <<<"$out"
+# The proxy reads the env file only at start: a later edit (say, a rotated key) must be flagged.
+sleep 1; touch "$work/config/claude-go/env"
+out="$(run "$here/bin/claude-go" -p hi 2>&1)"
+check "a proxy older than the env file is flagged" grep -q "claude-go-ctl restart" <<<"$out"
+run "$here/bin/claude-go-ctl" restart >/dev/null 2>&1
+out="$(run "$here/bin/claude-go" -p hi 2>&1)"
+check "...and not after a restart" eval '! grep -q "claude-go-ctl restart" <<<"$out"'
 out="$(run "$here/bin/claude-go" -p --once 2>&1)"
 check "non-leading --once goes to claude" grep -qF 'claude args: [-p][--once]' <<<"$out"
 check "no --once: proxy keeps running" up
