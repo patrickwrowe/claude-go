@@ -95,8 +95,10 @@ done
 
 if [[ -n "$CLAUDE_BIN" ]]; then
   echo "== real Claude Code turns through the proxy ($("$CLAUDE_BIN" --version 2>/dev/null))"
+  # Every turn runs in $work, whose CLAUDE.md must survive translation to each protocol.
+  echo "CLAUDE-MD-CANARY: project instructions" >"$work/CLAUDE.md"
   for m in minimax-m3 kimi-k2.7-code gpt-5.6-luna; do
-    out="$(ANTHROPIC_BASE_URL="http://127.0.0.1:$PROXY_PORT" ANTHROPIC_AUTH_TOKEN="$LITELLM_MASTER_KEY" \
+    out="$(cd "$work" && ANTHROPIC_BASE_URL="http://127.0.0.1:$PROXY_PORT" ANTHROPIC_AUTH_TOKEN="$LITELLM_MASTER_KEY" \
       ANTHROPIC_API_KEY="" CLAUDE_CONFIG_DIR="$work/claude-config" \
       ANTHROPIC_CUSTOM_HEADERS="x-opencode-session: sess-cc" \
       CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1 CLAUDE_CODE_ATTRIBUTION_HEADER=0 \
@@ -124,6 +126,19 @@ rows = [json.loads(l) for l in open(sys.argv[1]) if '"sess-cc"' in l]
 tools = max((r["n_tools"] for r in rows), default=0)
 print(f"  Claude Code sent {len(rows)} upstream requests; largest tool list forwarded: {tools} tools")
 print("  upstream paths:", sorted({(r['model'], r['path'].split('?')[0]) for r in rows}))
+PY
+  python3 - "$MOCK_LOG" <<'PY' || fail=1
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]) if '"sess-cc"' in l]
+ok = True
+for model in ("minimax-m3", "kimi-k2.7-code", "gpt-5.6-luna"):
+    hits = [r for r in rows if r["model"] == model]
+    good = hits and all(r.get("has_claude_md") for r in hits)
+    tag = "\033[32mPASS\033[0m" if good else "\033[31mFAIL\033[0m"
+    n = sum(bool(r.get("has_claude_md")) for r in hits)
+    print(f"  {tag} {model}: CLAUDE.md reached upstream in {n}/{len(hits)} requests")
+    ok &= bool(good)
+sys.exit(0 if ok else 1)
 PY
 else
   echo "== skipping Claude Code turns (claude not found; set CLAUDE_BIN to enable)"
