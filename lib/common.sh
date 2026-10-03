@@ -75,11 +75,18 @@ cg_uuid() {
   fi
 }
 
+# curl with "Authorization: Bearer <key>" read from stdin rather than given as
+# an argument: any local user can read a process's arguments with ps.
+cg_curl_auth() {
+  local key="$1"; shift
+  curl -H @- "$@" <<<"Authorization: Bearer $key"
+}
+
 # ---------- proxy lifecycle ----------
 # Healthy = our proxy answers on the port AND accepts our master key.
 cg_proxy_healthy() {
   curl -sf -m 3 -o /dev/null "$CG_URL/health/liveliness" || return 1
-  curl -sf -m 5 -o /dev/null -H "Authorization: Bearer $LITELLM_MASTER_KEY" "$CG_URL/v1/models"
+  cg_curl_auth "$LITELLM_MASTER_KEY" -sf -m 5 -o /dev/null "$CG_URL/v1/models"
 }
 
 cg_proxy_pid() {

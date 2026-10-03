@@ -49,7 +49,7 @@ cmd_status() {
   local pid; pid="$(cg_proxy_pid || true)"
   if cg_proxy_healthy; then
     local n
-    n="$(curl -s -m 5 -H "Authorization: Bearer $LITELLM_MASTER_KEY" "$CG_URL/v1/models" | grep -o '"id"' | wc -l | tr -d ' ')"
+    n="$(cg_curl_auth "$LITELLM_MASTER_KEY" -s -m 5 "$CG_URL/v1/models" | grep -o '"id"' | wc -l | tr -d ' ')"
     echo "proxy: healthy on $CG_URL (pid ${pid:-unknown}), $n models"
   else
     echo "proxy: not running (${pid:+stale pid $pid, }port $CLAUDE_GO_PORT)"
@@ -76,8 +76,8 @@ cmd_test() {
   local sid; sid="$(cg_uuid)"; local rc=0 m out t0 t1
   for m in "${models[@]}"; do
     t0=$(date +%s)
-    out="$(curl -s -m 120 "$CG_URL/v1/messages" \
-      -H "Authorization: Bearer $LITELLM_MASTER_KEY" -H "content-type: application/json" \
+    out="$(cg_curl_auth "$LITELLM_MASTER_KEY" -s -m 120 "$CG_URL/v1/messages" \
+      -H "content-type: application/json" \
       -H "anthropic-version: 2023-06-01" -H "x-opencode-session: $sid" \
       -d "{\"model\":\"$m\",\"max_tokens\":64,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: ok\"}]}")" || true
     t1=$(date +%s)
@@ -93,7 +93,7 @@ cmd_test() {
 cmd_sync_models() {
   cg_load_env
   local live
-  live="$(curl -sf -m 20 -H "Authorization: Bearer $OPENCODE_GO_API_KEY" "$OPENCODE_GO_BASE/v1/models")" \
+  live="$(cg_curl_auth "$OPENCODE_GO_API_KEY" -sf -m 20 "$OPENCODE_GO_BASE/v1/models")" \
     || { cg_err "could not fetch $OPENCODE_GO_BASE/v1/models"; return 1; }
   local live_ids all_ids
   live_ids="$(grep -o '"id" *: *"[^"]*"' <<<"$live" | sed 's/.*"\([^"]*\)"$/\1/' | sort -u)"
@@ -168,7 +168,7 @@ cmd_doctor() {
 
   echo "upstream"
   local code
-  code="$(curl -s -o /dev/null -w '%{http_code}' -m 15 -H "Authorization: Bearer $OPENCODE_GO_API_KEY" "$OPENCODE_GO_BASE/v1/models" || true)"
+  code="$(cg_curl_auth "$OPENCODE_GO_API_KEY" -s -o /dev/null -w '%{http_code}' -m 15 "$OPENCODE_GO_BASE/v1/models" || true)"
   case "$code" in
     200) ok "$OPENCODE_GO_BASE/v1/models reachable, key accepted" ;;
     401|403) no "$OPENCODE_GO_BASE rejected the key (HTTP $code)" ;;

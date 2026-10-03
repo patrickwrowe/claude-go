@@ -261,6 +261,10 @@ mode that the Gas Town preset uses.
 `test/uninstall.sh` runs `install.sh` and `uninstall.sh` in a throwaway HOME with a fake
 `uv`. It checks that `--purge` never deletes a home directory or `~/.claude`, and that
 neither script removes or replaces a LiteLLM that claude-go didn't install.
+`test/secrets.sh` samples `ps` while `claude-go-ctl status`, `sync-models` and `test`
+talk to deliberately slow fake endpoints. Neither key may appear in any process's
+arguments. It also round-trips a key containing `' & | \ $ ;` and spaces through
+`install.sh`.
 
 ## Rollout plan
 
