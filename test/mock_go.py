@@ -89,6 +89,9 @@ class H(BaseHTTPRequestHandler):
         })
         if not self._auth_ok():
             return self._json(401, {"error": {"message": "bad key", "type": "auth"}})
+        # Tests force an upstream failure with this header (the proxy forwards x-* headers).
+        if self.headers.get("x-mock-status"):
+            return self._json(int(self.headers["x-mock-status"]), {"error": {"message": "forced by test", "type": "mock"}})
         model = body.get("model", "?")
         stream = bool(body.get("stream"))
         blob = json.dumps(body)

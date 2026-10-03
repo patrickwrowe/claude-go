@@ -81,6 +81,18 @@ for model, path in want.items():
 sys.exit(0 if ok else 1)
 PY
 
+echo "== one failing request, one upstream attempt (Claude Code does the retrying)"
+for m in minimax-m3 kimi-k2.7-code gpt-5.6-luna; do
+  for st in 429 500; do
+    code="$(curl -s -o /dev/null -w '%{http_code}' -m 60 "http://127.0.0.1:$PROXY_PORT/v1/messages" \
+      -H "Authorization: Bearer $LITELLM_MASTER_KEY" -H "content-type: application/json" \
+      -H "anthropic-version: 2023-06-01" -H "x-mock-status: $st" -H "x-retry-probe: $m-$st" \
+      -d "{\"model\":\"$m\",\"max_tokens\":20,\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}")"
+    n="$(grep -c "\"x-retry-probe\": \"$m-$st\"" "$MOCK_LOG")"
+    if [[ $n == 1 && $code == "$st" ]]; then pass "$m upstream $st: 1 attempt, client gets $code"; else bad "$m upstream $st: $n upstream attempts, client got $code"; fi
+  done
+done
+
 if [[ -n "$CLAUDE_BIN" ]]; then
   echo "== real Claude Code turns through the proxy ($("$CLAUDE_BIN" --version 2>/dev/null))"
   for m in minimax-m3 kimi-k2.7-code gpt-5.6-luna; do
