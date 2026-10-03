@@ -48,6 +48,12 @@ UV="$(command -v uv || echo "$HOME/.local/bin/uv")"
 # ---------- 2. LiteLLM (pinned) ----------
 PIN="$(cat "$REPO/config/LITELLM_VERSION")"
 case "$PIN" in 1.82.7|1.82.8) die "config/LITELLM_VERSION pins a compromised LiteLLM release ($PIN)";; esac
+# Resolve LiteLLM's ~100 dependencies as of the date the pin was tested, so a
+# dependency release published since (the usual supply-chain route) is never
+# picked up. Bump it together with LITELLM_VERSION.
+PIN_DATE="$(cat "$REPO/config/LITELLM_EXCLUDE_NEWER")"
+[[ $PIN_DATE =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$ ]] || die "config/LITELLM_EXCLUDE_NEWER must be a UTC timestamp like 2026-09-24T00:00:00Z"
+export UV_EXCLUDE_NEWER="$PIN_DATE"   # uv's --exclude-newer, for the install below
 current="$("$UV" tool list 2>/dev/null | awk '/^litellm /{print $2}' | tr -d v || true)"
 case "$current" in 1.82.7|1.82.8)
   echo "!!! Installed LiteLLM $current is a known-compromised release (March 2026 supply-chain attack)."
