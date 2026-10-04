@@ -1,0 +1,5 @@
+{
+  "name": "claude-go",
+  "version": "0.1.0",
+  "description": "Mandatory operating rules for claude-go sessions (Claude Code on OpenCode Go models)"
+}

@@ -44,6 +44,7 @@ cat >"$work/bin/claude" <<'EOF'
 while [[ $# -ge 2 ]]; do
   case "$1" in
     --settings) printf '%s' "$2" >"$HOME/claude-settings.json" ;;
+    --plugin-dir) printf '%s\n' "$2" >>"$HOME/claude-plugin-dirs" ;;
     *) break ;;
   esac
   shift 2
@@ -96,6 +97,15 @@ check "claude gets config/claude-settings.json via --settings" python3 -c '
 import json, sys
 s = json.load(open(sys.argv[1]))
 sys.exit(s["permissions"]["disableAutoMode"] != "disable")' "$work/home/claude-settings.json"
+check "claude gets claude-go's plugins via --plugin-dir" eval '[[ -f $(tail -1 "$work/home/claude-plugin-dirs")/claude-go/skills/claude-go/SKILL.md ]]'
+for flag in --bare --safe-mode; do
+  out="$(run "$here/bin/claude-go" -p hi "$flag" 2>&1)"; rc=$?
+  check "$flag is refused (it drops hooks, plugins and CLAUDE.md)" eval '[[ $rc == 2 ]] && ! grep -q "claude args" <<<"$out"'
+done
+for v in CLAUDE_CODE_SIMPLE CLAUDE_CODE_SAFE_MODE; do
+  out="$(run env "$v=1" "$here/bin/claude-go" -p hi 2>&1)"; rc=$?
+  check "$v=1 in the environment is refused" eval '[[ $rc == 2 ]] && ! grep -q "claude args" <<<"$out"'
+done
 out="$(run "$here/bin/claude-go" --settings '{}' -p hi 2>&1)"; rc=$?
 check "a user --settings is refused (it would replace ours)" eval '[[ $rc == 2 ]] && ! grep -q "claude args" <<<"$out"'
 out="$(run "$here/bin/claude-go" -p -- --settings 2>&1)"

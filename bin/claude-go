@@ -51,6 +51,10 @@ cg_refuse_bypass() {
 prev=""
 for a in "$@"; do
   case "$a" in
+    --bare|--safe-mode)
+      cg_err "$a turns off hooks, plugins and CLAUDE.md, which removes claude-go's mandatory skill and your project's instructions."
+      cg_err "run plain \`claude $a\` if you need it."
+      exit 2 ;;
     --) break ;;
     --settings|--settings=*)
       cg_err "claude-go already passes --settings (config/claude-settings.json); a second one would replace it."
@@ -62,6 +66,15 @@ for a in "$@"; do
   [[ $prev == --permission-mode && $a == bypassPermissions ]] && cg_refuse_bypass
   prev="$a"
 done
+# What --bare / --safe-mode set; either one alone has the same effect.
+for v in CLAUDE_CODE_SIMPLE CLAUDE_CODE_SAFE_MODE; do
+  if [[ -n ${!v:-} && ${!v} != 0 ]]; then
+    cg_err "$v is set: it turns off hooks, plugins and CLAUDE.md, which removes claude-go's mandatory skill. Unset it."
+    exit 2
+  fi
+done
+[[ -r $CG_REPO/claude/plugins/claude-go/skills/claude-go/SKILL.md ]] \
+  || { cg_err "missing $CG_REPO/claude/plugins/claude-go (the mandatory claude-go skill)"; exit 1; }
 
 cg_load_env
 if [[ $stop_on_exit == 1 ]]; then
@@ -108,6 +121,9 @@ export CLAUDE_GO=1 CLAUDE_GO_SESSION="$sid"   # handy for statuslines and hooks
 # repository's .claude/settings*.json. Ours go first so `--` still works.
 cg_settings="$(cg_claude_settings "$CG_REPO")" || exit 1
 claude_args=(--settings "$cg_settings")
+# Hooks and skills that ship with claude-go (claude/plugins/*). Unlike
+# --settings, --plugin-dir adds to the user's plugins instead of replacing them.
+claude_args+=(--plugin-dir "$CG_REPO/claude/plugins")
 
 if [[ $stop_on_exit == 1 && $CG_PROXY_STARTED == 1 ]]; then
   # No exec here: exec would replace this shell and the EXIT trap would never run.
