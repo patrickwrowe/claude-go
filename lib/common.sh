@@ -43,16 +43,21 @@ cg_load_env() {
 # config/claude-settings.json goes to every claude-go session as --settings.
 # Flag settings outrank user (~/.claude-go/settings.json) and project
 # (.claude/settings*.json) settings, so a cloned repository can't undo them.
-# Placeholders: @CG_REPO@ (this checkout), @CG_ENV_FILE@ (the key file) and
-# @CLAUDE_CONFIG_DIR@ (claude-go's Claude Code config dir); call after cg_load_env.
+# Placeholders: @CG_REPO@ (this checkout), @CG_ENV_FILE@ (the key file),
+# @CLAUDE_CONFIG_DIR@ (claude-go's Claude Code config dir), @CG_VERSION@ and
+# @CG_MODEL@ (the model the session starts on, $CG_SESSION_MODEL); call after
+# cg_load_env.
 cg_claude_settings() {
   local repo="$1" f="$1/config/claude-settings.json" v
   local cfg="${CLAUDE_CONFIG_DIR:-${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}}"
+  local model="${CG_SESSION_MODEL:-unknown}" version; version="$(cat "$repo/VERSION")"
   [[ -f $f ]] || { cg_err "missing $f"; return 1; }
   for v in "$repo" "$CG_ENV_FILE" "$cfg"; do
     case "$v" in *[\"\\\|\&]*) cg_err "cannot put a path containing \" \\ | or & into settings JSON: $v"; return 1 ;; esac
   done
-  sed -e "s|@CG_REPO@|$repo|g" -e "s|@CG_ENV_FILE@|$CG_ENV_FILE|g" -e "s|@CLAUDE_CONFIG_DIR@|$cfg|g" "$f"
+  [[ $model =~ ^[A-Za-z0-9._:/@+-]+$ ]] || model="unknown"
+  sed -e "s|@CG_REPO@|$repo|g" -e "s|@CG_ENV_FILE@|$CG_ENV_FILE|g" -e "s|@CLAUDE_CONFIG_DIR@|$cfg|g" \
+      -e "s|@CG_VERSION@|$version|g" -e "s|@CG_MODEL@|$model|g" "$f"
 }
 
 cg_litellm_bin() {
