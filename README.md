@@ -90,6 +90,14 @@ choices live in Claude Code's config dir. Sharing `~/.claude` risks a Go model I
 two setups' session histories. The installer offers to symlink `CLAUDE.md`, `skills/`,
 `agents/` and `commands/` from `~/.claude`, so your instructions and tooling carry over.
 
+Those links are shared, so a claude-go session could otherwise change instructions and
+skills that your subscription sessions trust. `config/claude-settings.json` denies the
+model's file tools (Read, Edit, Write) access to the key file. It also denies writes to
+`~/.claude`, to claude-go's Claude Code settings, `CLAUDE.md`, `skills/`, `agents/` and
+`commands/`, and to this checkout's `bin/`, `lib/`, `config/` and `claude/`. Claude Code
+itself only asks before some of these writes, so a person could still approve one. A
+deny rule cannot be approved. To change these files, edit them outside claude-go.
+
 ## How it works
 
 `bin/claude-go` loads your config, starts the proxy if needed, and `exec`s Claude Code with:
@@ -294,6 +302,7 @@ test/bypass.sh         bypass mode stays off; dontAsk preset (real Claude Code)
 test/skill.sh          the mandatory claude-go skill reaches the model (real Claude Code)
 test/guard.sh          destructive-command guard: decision table + real Claude Code
 test/sandbox.sh        the Bash sandbox contains an allowed script (real Claude Code)
+test/deny.sh           file tools cannot touch the key file or guardrails (real Claude Code)
 test/fake_proxy.py     fake proxy that logs every request Claude Code sends
 test/claude_harness.sh shared harness for the real-Claude-Code tests
 install.sh / uninstall.sh

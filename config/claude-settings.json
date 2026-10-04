@@ -3,6 +3,19 @@
     "disableBypassPermissionsMode": "disable",
     "disableAutoMode": "disable",
     "deny": [
+      "Read(/@CG_ENV_FILE@)",
+      "Edit(/@CG_ENV_FILE@)",
+      "Edit(~/.claude/**)",
+      "Edit(/@CLAUDE_CONFIG_DIR@/settings.json)",
+      "Edit(/@CLAUDE_CONFIG_DIR@/settings.local.json)",
+      "Edit(/@CLAUDE_CONFIG_DIR@/CLAUDE.md)",
+      "Edit(/@CLAUDE_CONFIG_DIR@/skills/**)",
+      "Edit(/@CLAUDE_CONFIG_DIR@/agents/**)",
+      "Edit(/@CLAUDE_CONFIG_DIR@/commands/**)",
+      "Edit(/@CG_REPO@/bin/**)",
+      "Edit(/@CG_REPO@/lib/**)",
+      "Edit(/@CG_REPO@/config/**)",
+      "Edit(/@CG_REPO@/claude/**)"
     ]
   },
   "sandbox": {
