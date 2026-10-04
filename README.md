@@ -231,6 +231,15 @@ result must make it back through the translation.
 
 Run it after any change to the catalog, generator, or LiteLLM pin.
 
+`test/instructions.sh` answers "does claude-go read my instructions?" It runs the real
+Claude Code through `bin/claude-go` in fresh repositories, with `test/fake_proxy.py`
+logging every request. It checks that `CLAUDE.md`, its `@imports`, `.claude/CLAUDE.md`,
+`CLAUDE.local.md`, `AGENTS.md` (when there is no `CLAUDE.md`), a nested `CLAUDE.md` once
+the model works in that directory, and `~/.claude-go/CLAUDE.md` all reach the model. It
+also pins that plain claude's `~/.claude/CLAUDE.md` does **not**, unless it is linked.
+`test/offline.sh` checks that `CLAUDE.md` survives LiteLLM's translation for every
+protocol.
+
 `test/lifecycle.sh` needs nothing installed besides `bash`, `curl` and `python3`. A fake
 `litellm` and a fake `claude` exercise `bin/claude-go` and the proxy lifecycle: start on
 demand and reuse, argument pass-through, `--once` teardown (including on Ctrl-C), the proxy
@@ -306,6 +315,7 @@ claude/plugins/        plugins loaded into every session (claude-go: the mandato
 scripts/gen-config.sh  catalog -> litellm.yaml
 test/offline.sh        offline end-to-end test (mock Go + real LiteLLM + real Claude Code)
 test/mock_go.py        fake Go API (Messages, Chat Completions, Responses, tool calls)
+test/instructions.sh   which instruction files reach the model (fake proxy + real Claude Code)
 test/lifecycle.sh      proxy lifecycle test (fake LiteLLM + fake Claude Code)
 test/settings.sh       guardrail test (fake proxy + real Claude Code)
 test/bypass.sh         bypass mode stays off; dontAsk preset (real Claude Code)

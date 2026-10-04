@@ -86,6 +86,7 @@ class H(BaseHTTPRequestHandler):
             "stream": body.get("stream", False),
             "n_tools": len(body.get("tools") or []),
             "body_keys": sorted(body.keys()),
+            "has_claude_md": "CLAUDE-MD-CANARY" in raw.decode("utf-8", "replace"),
         })
         if not self._auth_ok():
             return self._json(401, {"error": {"message": "bad key", "type": "auth"}})
