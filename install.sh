@@ -83,9 +83,17 @@ else
   fi
   [[ -n $key ]] || die "an OpenCode Go API key is required"
   master="sk-cgo-$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')"
-  (umask 077; sed -e "s|^OPENCODE_GO_API_KEY=.*|OPENCODE_GO_API_KEY=$key|" \
-                  -e "s|^LITELLM_MASTER_KEY=.*|LITELLM_MASTER_KEY=$master|" \
-                  "$REPO/config/env.example" >"$ENV_FILE")
+  # Builtins only, so the key never appears in a process's arguments, and
+  # single-quoted, so any character in it survives `. env` unchanged.
+  shq() { local q="'\\''"; printf "'%s'" "${1//\'/$q}"; }
+  (umask 077
+   while IFS= read -r line; do
+     case "$line" in
+       OPENCODE_GO_API_KEY=*) printf 'OPENCODE_GO_API_KEY=%s\n' "$(shq "$key")" ;;
+       LITELLM_MASTER_KEY=*)  printf 'LITELLM_MASTER_KEY=%s\n' "$(shq "$master")" ;;
+       *) printf '%s\n' "$line" ;;
+     esac
+   done <"$REPO/config/env.example" >"$ENV_FILE")
   note "wrote $ENV_FILE (mode 600); the proxy master key was generated locally"
 fi
 chmod 600 "$ENV_FILE"
