@@ -180,6 +180,22 @@ check "env-shebang litellm starts" eval '[[ $rc == 0 ]] && up'
 out="$(run "$here/bin/claude-go-ctl" stop 2>&1)"
 check "env-shebang litellm is stopped by claude-go-ctl" eval 'grep -q "stopped proxy" <<<"$out" && down'
 
+echo "== plain claude's ~/.claude"
+mkdir -p "$work/home/.claude" "$work/home/.claude-go"
+echo "my global rule" >"$work/home/.claude/CLAUDE.md"
+echo '{"permissions": {"deny": ["Bash(rm:*)"]}}' >"$work/home/.claude/settings.json"
+out="$(run "$here/bin/claude-go" -p hi 2>&1)"
+check "launch says ~/.claude does not apply" grep -q "does not apply to claude-go sessions" <<<"$out"
+out="$(run env OPENCODE_GO_BASE=http://127.0.0.1:9 "$here/bin/claude-go-ctl" doctor 2>&1)"
+check "doctor names the unseen CLAUDE.md" grep -qF "~/.claude/CLAUDE.md is not seen by claude-go" <<<"$out"
+check "doctor names the unapplied permissions" grep -qF '"permissions" in ~/.claude/settings.json does not apply' <<<"$out"
+ln -s "$work/home/.claude/CLAUDE.md" "$work/home/.claude-go/CLAUDE.md"
+echo '{"permissions": {"deny": ["Bash(rm:*)"]}}' >"$work/home/.claude-go/settings.json"
+out="$(run "$here/bin/claude-go" -p hi 2>&1)"
+check "silent once linked and copied" eval '! grep -q "does not apply" <<<"$out"'
+rm -rf "$work/home/.claude" "$work/home/.claude-go"
+stop
+
 echo "== without setsid (macOS)"
 nosetsid="$work/nosetsid"; mkdir -p "$nosetsid"
 for t in bash env python3 curl cat ps mkdir rmdir date sleep tail seq rm ls cut tr od dirname readlink nohup pwd head grep sed; do

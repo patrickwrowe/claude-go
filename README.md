@@ -90,8 +90,14 @@ choices live in Claude Code's config dir. Sharing `~/.claude` risks a Go model I
 `kimi-k2.7-code` ending up in plain `claude` sessions, where it fails, and mixes the
 two setups' session histories. The installer offers to symlink `CLAUDE.md`, `skills/`,
 `agents/` and `commands/` from `~/.claude`, so your instructions and tooling carry over.
+Anything you decline, or create in `~/.claude` later, is invisible to claude-go.
+`~/.claude/settings.json` is never shared, so its permission rules, hooks and sandbox
+settings don't apply either: copy the ones you rely on into `~/.claude-go/settings.json`.
+`claude-go` prints a one-line note when part of `~/.claude` doesn't apply, and
+`claude-go-ctl doctor` names each part. To silence the `CLAUDE.md` note without sharing,
+create an empty `~/.claude-go/CLAUDE.md`.
 
-Those links are shared, so a claude-go session could otherwise change instructions and
+The linked files are shared, so a claude-go session could otherwise change instructions and
 skills that your subscription sessions trust. `config/claude-settings.json` denies the
 model's file tools (Read, Edit, Write) access to the key file. It also denies writes to
 `~/.claude`, to claude-go's Claude Code settings, `CLAUDE.md`, `skills/`, `agents/` and
