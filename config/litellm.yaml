@@ -277,7 +277,10 @@ litellm_settings:
   # Responses API. Go's chat models only speak Chat Completions, so opt out;
   # models listed with the openai/responses/ prefix still use Responses.
   use_chat_completions_url_for_anthropic_messages: true
-  num_retries: 2
+  # Claude Code already retries (up to 10 times, honouring retry-after). Proxy
+  # retries multiply with those: at 2, one turn against a rate-limited model
+  # made 33 upstream requests. Let Claude Code own retrying.
+  num_retries: 0
   request_timeout: 600
 
 general_settings:
