@@ -21,7 +21,7 @@ bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=1; }
 check() { local name="$1"; shift; if "$@"; then pass "$name"; else bad "$name"; fi; }
 
 # ---------- fakes ----------
-mkdir -p "$work/bin" "$work/config/claude-go"
+mkdir -p "$work/bin" "$work/config/claude-go" "$work/home"
 py="$(command -v python3)"
 # Direct interpreter shebang, like a pip/uv-installed console script.
 cat >"$work/bin/litellm" <<EOF
@@ -39,6 +39,15 @@ EOF
 { echo '#!/usr/bin/env python3'; tail -n +2 "$work/bin/litellm"; } >"$work/bin/litellm-env"
 cat >"$work/bin/claude" <<'EOF'
 #!/usr/bin/env bash
+# claude-go's own leading flags are recorded rather than echoed, so the checks
+# below still see exactly the arguments the user typed.
+while [[ $# -ge 2 ]]; do
+  case "$1" in
+    --settings) printf '%s' "$2" >"$HOME/claude-settings.json" ;;
+    *) break ;;
+  esac
+  shift 2
+done
 out=""; for a in "$@"; do out+="[$a]"; done
 echo "claude args: $out"
 [[ -n ${FAKE_CLAUDE_SLEEP:-} ]] && sleep "$FAKE_CLAUDE_SLEEP"
@@ -82,6 +91,16 @@ out="$(run "$here/bin/claude-go" -p --once 2>&1)"
 check "non-leading --once goes to claude" grep -qF 'claude args: [-p][--once]' <<<"$out"
 check "no --once: proxy keeps running" up
 
+echo "== settings layer"
+check "claude gets config/claude-settings.json via --settings" python3 -c '
+import json, sys
+s = json.load(open(sys.argv[1]))
+sys.exit(s["permissions"]["disableAutoMode"] != "disable")' "$work/home/claude-settings.json"
+out="$(run "$here/bin/claude-go" --settings '{}' -p hi 2>&1)"; rc=$?
+check "a user --settings is refused (it would replace ours)" eval '[[ $rc == 2 ]] && ! grep -q "claude args" <<<"$out"'
+out="$(run "$here/bin/claude-go" -p -- --settings 2>&1)"
+check "--settings after -- is just text for claude" grep -qF 'claude args: [-p][--][--settings]' <<<"$out"
+
 echo "== process group"
 pid="$(pidfile)"
 check "pid file names the proxy" eval '[[ -n $pid ]] && ps -o args= -p "$pid" | grep -q litellm'
@@ -123,7 +142,7 @@ check "env-shebang litellm is stopped by claude-go-ctl" eval 'grep -q "stopped p
 
 echo "== without setsid (macOS)"
 nosetsid="$work/nosetsid"; mkdir -p "$nosetsid"
-for t in bash env python3 curl cat ps mkdir rmdir date sleep tail seq rm ls cut tr od dirname readlink nohup pwd head grep; do
+for t in bash env python3 curl cat ps mkdir rmdir date sleep tail seq rm ls cut tr od dirname readlink nohup pwd head grep sed; do
   p="$(command -v "$t")" && ln -s "$p" "$nosetsid/$t"
 done
 PATH="$nosetsid" run "$here/bin/claude-go" -p hi >/dev/null 2>&1; rc=$?
