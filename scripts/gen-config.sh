@@ -8,6 +8,19 @@ catalog="${1:-$here/config/models.tsv}"
 out="${2:-$here/config/litellm.yaml}"
 version="$(cat "$here/VERSION" 2>/dev/null || echo dev)"
 
+# Validate the whole catalog first: a malformed row used to be skipped, or
+# turned into a second deployment, without a word.
+awk -F'\t' '
+  /^[[:space:]]*(#|$)/ { next }
+  function bad(msg) { printf("%s:%d: %s\n", FILENAME, FNR, msg) > "/dev/stderr"; errors++ }
+  NF < 3 { bad("expected TAB-separated id, protocol, enabled[, note]; spaces instead of tabs?"); next }
+  $1 !~ /^[A-Za-z0-9][A-Za-z0-9._-]*$/ { bad("model id \"" $1 "\" may only use letters, digits, . _ -") }
+  $2 != "messages" && $2 != "chat" && $2 != "responses" { bad("unknown protocol \"" $2 "\" (messages, chat or responses)") }
+  $3 != "yes" && $3 != "no" { bad("enabled must be yes or no, not \"" $3 "\"") }
+  seen[$1]++ { bad("duplicate model id \"" $1 "\" (LiteLLM would load-balance between the rows)") }
+  END { if (errors) { printf("%d problem(s) in the catalog; %s not written\n", errors, out) > "/dev/stderr"; exit 1 } }
+' out="$out" "$catalog"
+
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 

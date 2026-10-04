@@ -245,6 +245,10 @@ the model works in that directory, and `~/.claude-go/CLAUDE.md` all reach the mo
 also pins that plain claude's `~/.claude/CLAUDE.md` does **not**, unless it is linked.
 `test/offline.sh` checks that `CLAUDE.md` survives LiteLLM's translation for every
 protocol.
+`test/catalog.sh` checks that the committed `config/litellm.yaml` matches
+`config/models.tsv`. It also checks that malformed rows stop generation: spaces instead of
+tabs, an `enabled` value other than `yes`/`no`, duplicate ids (LiteLLM would load-balance
+between them), unknown protocols, and ids that would break the YAML.
 
 `test/lifecycle.sh` needs nothing installed besides `bash`, `curl` and `python3`. A fake
 `litellm` and a fake `claude` exercise `bin/claude-go` and the proxy lifecycle: start on
