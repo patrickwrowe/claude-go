@@ -309,6 +309,7 @@ arguments. It also round-trips a key containing `' & | \ $ ;` and spaces through
 | `proxy exited during startup` | `claude-go-ctl logs`; usually a YAML typo after editing the catalog: `claude-go-ctl regen` |
 | `port 4141 is in use` | set `CLAUDE_GO_PORT` in `~/.config/claude-go/env` |
 | 401 from upstream | wrong Go key: edit `~/.config/claude-go/env`, `claude-go-ctl restart` |
+| `the running proxy still uses the env from before your last change` | the proxy reads keys and config only at start: `claude-go-ctl restart` (this ends in-flight requests of other claude-go sessions) |
 | 429 / usage limit | Go quota for that model is exhausted; switch model or wait for the 5-hour window |
 | one translated model fails, others work | `claude-go-ctl test <model>` for the raw error; try the same task on a `messages` model |
 

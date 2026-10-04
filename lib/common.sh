@@ -100,11 +100,25 @@ cg_proxy_pid() {
   [[ $args == *litellm* && $args == *"--port ${CLAUDE_GO_PORT:-}"* ]] && printf '%s\n' "$pid"
 }
 
+# The proxy reads the env file (keys, upstream) and litellm.yaml only when it
+# starts. Say so when either changed since, e.g. a rotated key or a new upstream
+# that the running proxy is not using. The pid file is written at start.
+cg_proxy_stale_warning() {
+  local repo="$1" f
+  [[ -f $CG_PID_FILE ]] || return 0
+  for f in "$CG_ENV_FILE" "$repo/config/litellm.yaml"; do
+    if [[ $f -nt $CG_PID_FILE ]]; then
+      cg_err "the running proxy still uses the $(basename "$f") from before your last change; run: claude-go-ctl restart"
+      return 0
+    fi
+  done
+}
+
 # Sets CG_PROXY_STARTED=1 when this call launched the proxy (vs. reusing one).
 cg_proxy_start() {
   local repo="$1" timeout="${CLAUDE_GO_START_TIMEOUT:-90}"
   CG_PROXY_STARTED=0
-  cg_proxy_healthy && return 0
+  if cg_proxy_healthy; then cg_proxy_stale_warning "$repo"; return 0; fi
   mkdir -p "$CG_STATE_HOME"
 
   # Serialize concurrent starts (e.g. several claude-go sessions launched at once).
