@@ -103,7 +103,9 @@ deny rule cannot be approved. To change these files, edit them outside claude-go
 `bin/claude-go` loads your config, starts the proxy if needed, and `exec`s Claude Code with:
 
 - `ANTHROPIC_BASE_URL` pointing at the proxy and `ANTHROPIC_AUTH_TOKEN` set to the local
-  master key (Bearer auth, so there's no login prompt and your subscription login stays out of it);
+  master key (Bearer auth, so there's no login prompt and your subscription login stays out of it).
+  `OPENCODE_GO_API_KEY` is removed from Claude Code's environment, because only the proxy
+  needs it and Claude Code passes its environment to every command the model runs;
 - `ANTHROPIC_MODEL` and `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL` mapped to Go models;
 - `x-opencode-session: <uuid>` added via `ANTHROPIC_CUSTOM_HEADERS`. Go asks clients for a
   stable per-conversation session ID for routing and prompt caching;

@@ -91,6 +91,9 @@ claude_bin="${CLAUDE_GO_CLAUDE_BIN:-$(command -v claude || true)}"
 export ANTHROPIC_BASE_URL="$CG_URL"
 export ANTHROPIC_AUTH_TOKEN="$LITELLM_MASTER_KEY"   # Bearer auth: no login prompt, subscription login stays inactive
 unset ANTHROPIC_API_KEY CLAUDE_CODE_USE_BEDROCK CLAUDE_CODE_USE_VERTEX CLAUDE_CODE_USE_FOUNDRY
+# Only the proxy (already running) needs the Go key. Claude Code hands its
+# environment to every command the model runs, so don't pass the key along.
+unset OPENCODE_GO_API_KEY LITELLM_MASTER_KEY CLAUDE_GO_ANTHROPIC_BASE CLAUDE_GO_OPENAI_BASE
 
 # --- model tiers (Claude Code's opus/sonnet/haiku aliases map onto Go models) ---
 export ANTHROPIC_MODEL="${CLAUDE_GO_MODEL:-minimax-m3}"                 # --model overrides this

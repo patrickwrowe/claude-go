@@ -29,6 +29,7 @@ cat >"$work/bin/litellm" <<EOF
 import http.server, signal, sys
 signal.signal(signal.SIGINT, lambda *a: sys.exit(130))
 port = int(sys.argv[sys.argv.index('--port') + 1])
+import os; open(os.path.join(os.environ['HOME'], 'litellm.env'), 'w').write(''.join(f'{k}={v}\n' for k, v in os.environ.items()))
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200); self.end_headers(); self.wfile.write(b'{"data": []}')
@@ -51,6 +52,7 @@ while [[ $# -ge 2 ]]; do
 done
 out=""; for a in "$@"; do out+="[$a]"; done
 echo "claude args: $out"
+env >"$HOME/claude.env"
 [[ -n ${FAKE_CLAUDE_SLEEP:-} ]] && sleep "$FAKE_CLAUDE_SLEEP"
 exit "${FAKE_CLAUDE_RC:-0}"
 EOF
@@ -130,6 +132,16 @@ stop; ctrl_c -p hi; sleep 1
 check "SIGINT to claude-go's group leaves proxy up" up
 kill -HUP "$(pidfile)" 2>/dev/null; sleep 1
 check "SIGHUP to the proxy leaves it up" up
+
+echo "== secrets"
+run "$here/bin/claude-go" -p hi >/dev/null 2>&1
+check "claude does not get OPENCODE_GO_API_KEY" eval '! grep -q "^OPENCODE_GO_API_KEY=" "$work/home/claude.env"'
+check "claude does not get LITELLM_MASTER_KEY" eval '! grep -q "^LITELLM_MASTER_KEY=" "$work/home/claude.env"'
+check "claude still authenticates to the proxy" grep -qx "ANTHROPIC_AUTH_TOKEN=sk-test" "$work/home/claude.env"
+stop
+CLAUDE_GO_STOP_ON_EXIT=1 run "$here/bin/claude-go" -p hi >/dev/null 2>&1
+check "a proxy claude-go starts still gets the key (and --once still stops it)" eval 'grep -qx "OPENCODE_GO_API_KEY=test" "$work/home/litellm.env" && down'
+run "$here/bin/claude-go" -p hi >/dev/null 2>&1   # leave a proxy running, as the next section expects
 
 echo "== --once"
 out="$(run "$here/bin/claude-go" --once -p hi 2>&1)"
