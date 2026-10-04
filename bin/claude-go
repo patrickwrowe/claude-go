@@ -110,6 +110,17 @@ export ANTHROPIC_DEFAULT_SONNET_MODEL="${CLAUDE_GO_SONNET_MODEL:-minimax-m3}"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="${CLAUDE_GO_HAIKU_MODEL:-qwen3.8-flash}"  # background tasks, titles, Explore
 if [[ -n ${CLAUDE_GO_SUBAGENT_MODEL:-} ]]; then export CLAUDE_CODE_SUBAGENT_MODEL="$CLAUDE_GO_SUBAGENT_MODEL"; fi
 if [[ -n ${CLAUDE_GO_COMPACT_WINDOW:-} ]]; then export CLAUDE_CODE_AUTO_COMPACT_WINDOW="$CLAUDE_GO_COMPACT_WINDOW"; fi
+# A typo or a disabled model would only fail when that tier is first used,
+# for haiku quietly in background work (titles, summaries, Explore agent).
+tier_ok=1
+for v in ANTHROPIC_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL \
+         ANTHROPIC_DEFAULT_HAIKU_MODEL CLAUDE_CODE_SUBAGENT_MODEL; do
+  if [[ -n ${!v:-} ]] && ! cg_model_enabled "$CG_REPO" "${!v}"; then
+    cg_err "${!v} ($v, from ${CG_ENV_FILE}) is not an enabled model in config/models.tsv; see: claude-go-ctl models"
+    tier_ok=0
+  fi
+done
+[[ $tier_ok == 1 ]] || exit 1
 
 # --- Go client etiquette ---
 # Go asks for a stable per-conversation session ID in x-opencode-session (routing +
