@@ -196,14 +196,19 @@ cmd_gastown() {
 #    It is Claude Code underneath, so it reuses Claude's hook integration.
 #    Compare these fields with the built-in "claude" preset in your Gas Town
 #    version (gt config agent list / internal/config/agents.go) and copy any
-#    that differ; only "name" and "command" should need to change.
+#    that differ, EXCEPT "args": the built-in preset skips all permission
+#    checks, which trusts a Claude model with every command. claude-go refuses
+#    --dangerously-skip-permissions. dontAsk never waits on a prompt (so an
+#    unattended agent can't hang) and denies anything not allowed in
+#    ~/.claude-go/settings.json "permissions.allow" -- list what polecats need
+#    there, e.g. ["Edit", "Bash(git commit:*)", "Bash(npm test:*)"].
 {
   "version": 1,
   "agents": {
     "claude-go": {
       "name": "claude-go",
       "command": "$bin",
-      "args": ["--dangerously-skip-permissions"],
+      "args": ["--permission-mode", "dontAsk"],
       "process_names": ["claude", "node"],
       "resume_flag": "--resume",
       "resume_style": "flag",
