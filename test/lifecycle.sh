@@ -218,6 +218,22 @@ kill -HUP "$(pidfile)" 2>/dev/null; sleep 1
 check "SIGHUP to the proxy leaves it up" up
 stop
 
+echo "== start lock"
+stop
+sleep 0 & dead=$!; wait "$dead"
+mkdir -p "$state/start.lock"; echo "$dead" >"$state/start.lock/pid"
+t0=$(date +%s); out="$(run "$here/bin/claude-go" -p hi 2>&1)"; took=$(( $(date +%s) - t0 ))
+check "a lock left by a dead claude-go is broken at once (took ${took}s)" eval '(( took < 8 )) && up && grep -q "removing stale lock" <<<"$out"'
+check "...and released after the start" test ! -e "$state/start.lock"
+stop
+sleep 300 & alive=$!
+mkdir -p "$state/start.lock"; echo "$alive" >"$state/start.lock/pid"
+( sleep 3; rm -f "$state/start.lock/pid"; rmdir "$state/start.lock" ) &
+out="$(run "$here/bin/claude-go" -p hi 2>&1)"
+check "a live holder's lock is waited for, not broken" eval '! grep -q "removing stale lock" <<<"$out" && up'
+kill "$alive" 2>/dev/null; wait "$alive" 2>/dev/null
+stop
+
 echo
 if [[ $fail == 0 ]]; then echo "all lifecycle checks passed"; else echo "SOME LIFECYCLE CHECKS FAILED"; fi
 exit $fail
