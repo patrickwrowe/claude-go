@@ -219,9 +219,14 @@ its endpoint in the Endpoints table at https://opencode.ai/docs/go/, add a line 
 `config/models.tsv`, run `claude-go-ctl regen`, and commit.
 
 **LiteLLM upgrades.** The version is pinned in `config/LITELLM_VERSION`. LiteLLM
-1.82.7 and 1.82.8 on PyPI were compromised with a credential stealer in March 2026;
-the installer and doctor refuse them. To upgrade, bump the pin, run
-`test/offline.sh`, then commit. Other machines pick it up with `claude-go-ctl update`.
+1.82.7 and 1.82.8 on PyPI were compromised with a credential stealer in March 2026,
+and the installer and doctor refuse them. Pinning LiteLLM alone doesn't pin its
+~100 dependencies. Installed on 2026-10-03, 20 of them resolved to versions published
+after 1.102.1 was tested. So `config/LITELLM_EXCLUDE_NEWER` also fixes the date that
+every package is resolved as of (`uv tool install --exclude-newer`). A compromised
+release published later is never picked up. To upgrade, bump both files: the date must
+be after the new release and is the day you tested it. Then run `test/offline.sh` and
+commit. Other machines pick it up with `claude-go-ctl update`.
 
 **New machine.** Clone, `./install.sh`, done. Only the key needs to be entered per machine.
 
@@ -255,6 +260,8 @@ protocol.
 `config/models.tsv`. It also checks that malformed rows stop generation: spaces instead of
 tabs, an `enabled` value other than `yes`/`no`, duplicate ids (LiteLLM would load-balance
 between them), unknown protocols, and ids that would break the YAML.
+`test/pin.sh` checks that `install.sh` resolves LiteLLM's dependencies as of
+`config/LITELLM_EXCLUDE_NEWER`, and that it refuses a malformed date.
 
 `test/lifecycle.sh` needs nothing installed besides `bash`, `curl` and `python3`. A fake
 `litellm` and a fake `claude` exercise `bin/claude-go` and the proxy lifecycle: start on
@@ -336,6 +343,7 @@ config/LITELLM_VERSION pinned LiteLLM release
 config/claude-settings.json  guardrails passed to every session with --settings
 claude/plugins/        plugins loaded into every session (claude-go: the mandatory skill;
                        claude-go-guard: destructive commands)
+config/LITELLM_EXCLUDE_NEWER  date LiteLLM's dependencies are resolved as of
 scripts/gen-config.sh  catalog -> litellm.yaml
 test/offline.sh        offline end-to-end test (mock Go + real LiteLLM + real Claude Code)
 test/mock_go.py        fake Go API (Messages, Chat Completions, Responses, tool calls)

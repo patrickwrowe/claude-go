@@ -196,11 +196,11 @@ cmd_doctor() {
 
 cmd_update() {
   local before after
-  before="$(cat "$CG_REPO/config/LITELLM_VERSION")"
+  before="$(cat "$CG_REPO/config/LITELLM_VERSION" "$CG_REPO/config/LITELLM_EXCLUDE_NEWER" | tr '\n' ' ')"
   git -C "$CG_REPO" pull --ff-only
-  after="$(cat "$CG_REPO/config/LITELLM_VERSION")"
+  after="$(cat "$CG_REPO/config/LITELLM_VERSION" "$CG_REPO/config/LITELLM_EXCLUDE_NEWER" | tr '\n' ' ')"
   if [[ $before != "$after" ]]; then
-    echo "LiteLLM pin changed $before -> $after; reinstalling"
+    echo "LiteLLM pin changed ($before-> $after); reinstalling"
     bash "$CG_REPO/install.sh" --litellm-only
   fi
   cmd_regen
