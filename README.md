@@ -79,6 +79,7 @@ Secrets and personal settings live **outside the repo** in `~/.config/claude-go/
 | `CLAUDE_GO_PORT` | `4141` | proxy port (127.0.0.1 only) |
 | `OPENCODE_GO_BASE` | `https://opencode.ai/zen/go` | upstream |
 | `CLAUDE_GO_CONFIG_DIR` | `~/.claude-go` | Claude Code state for claude-go sessions |
+| `CLAUDE_GO_CUSTOM_HEADERS` | unset | extra request headers for Go, one `name: value` per line |
 
 Tier defaults favour models that are both capable and generous under Go's quotas.
 Qwen3.8 Max, Qwen3.7 Max, Kimi K3, GLM-5.3 and Grok have small quotas (a few hundred
@@ -108,7 +109,10 @@ deny rule cannot be approved. To change these files, edit them outside claude-go
   needs it and Claude Code passes its environment to every command the model runs;
 - `ANTHROPIC_MODEL` and `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL` mapped to Go models;
 - `x-opencode-session: <uuid>` added via `ANTHROPIC_CUSTOM_HEADERS`. Go asks clients for a
-  stable per-conversation session ID for routing and prompt caching;
+  stable per-conversation session ID for routing and prompt caching. Your own
+  `ANTHROPIC_CUSTOM_HEADERS` is **not** passed on. It is meant for Anthropic, often
+  carries a gateway token, and the proxy forwards every `x-*` header to Go. Headers meant
+  for Go go in `CLAUDE_GO_CUSTOM_HEADERS`;
 - `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` and `CLAUDE_CODE_ATTRIBUTION_HEADER=0`, so
   unknown betas don't cause errors and a per-request fingerprint doesn't defeat prefix caching.
 - commit and PR attribution that names claude-go and the Go model the session started on
