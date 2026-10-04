@@ -5,5 +5,24 @@
     "deny": [
     ]
   },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": false,
+    "allowUnsandboxedCommands": false,
+    "credentials": {
+      "envVars": [
+        { "name": "ANTHROPIC_AUTH_TOKEN", "mode": "deny" },
+        { "name": "LITELLM_MASTER_KEY", "mode": "deny" },
+        { "name": "OPENCODE_GO_API_KEY", "mode": "deny" }
+      ]
+    },
+    "filesystem": {
+      "denyRead": ["@CG_ENV_FILE@"],
+      "denyWrite": [
+        "~/.claude", "@CLAUDE_CONFIG_DIR@", "@CG_ENV_FILE@",
+        "@CG_REPO@/bin", "@CG_REPO@/lib", "@CG_REPO@/config", "@CG_REPO@/claude"
+      ]
+    }
+  },
   "disableAllHooks": false
 }

@@ -129,6 +129,11 @@ cmd_doctor() {
   echo "dependencies"
   if command -v claude >/dev/null; then ok "claude $(claude --version 2>/dev/null | head -1)"; else no "claude not on PATH"; fi
   for b in curl git uv; do command -v $b >/dev/null && ok "$b" || no "$b not on PATH"; done
+  if [[ $(uname -s) == Linux ]]; then  # Claude Code's Bash sandbox; macOS has it built in
+    for b in bwrap socat; do
+      command -v $b >/dev/null && ok "$b (sandbox)" || warn "$b not on PATH: Bash runs unsandboxed (install bubblewrap and socat)"
+    done
+  fi
   local lb lv pinned; pinned="$(cat "$CG_REPO/config/LITELLM_VERSION")"
   if lb="$(cg_litellm_bin 2>/dev/null)"; then
     lv="$(uv tool list 2>/dev/null | awk '/^litellm /{print $2}' | tr -d v)"
